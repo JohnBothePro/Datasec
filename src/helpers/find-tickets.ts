@@ -42,7 +42,7 @@ export function assertNotStreetKeyword(value: string | undefined, field: string)
   if (looksLikeStreet(value) || /\d+\s*[a-z]?\s*\/\s*\d+/i.test(value)) {
     throw new Error(
       `HARD-NO: '${field}' sieht nach einer Straße/Hausnr aus (${value}). ` +
-        "Straße gehört nicht in KEYWORD. Erst datasec_h_resolve / Crosswalk."
+        "Straße gehört nicht in KEYWORD. Erst datasec_h_resolve (Live-Adresse / Seed)."
     );
   }
   return value;
@@ -204,7 +204,8 @@ export async function findTickets(
         houseNumbers: input.houseNumbers,
         weNr: input.weNr,
         partnerIds: input.partnerIds,
-        allowDocumentFallback: input.allowDocumentFallback === true,
+        liveResolve: input.liveResolve,
+        allowDocumentFallback: input.allowDocumentFallback,
       });
       warnings.push(...(resolveEnv.warnings ?? []));
       ambiguities.push(...(resolveEnv.ambiguities ?? []));
@@ -350,7 +351,8 @@ export async function findTickets(
             maxPartners: MAX_PARTNERS,
             maxSearchCalls: MAX_SEARCH_CALLS,
             elapsedMs: Date.now() - startedAt,
-            documentFallback: input.allowDocumentFallback === true,
+            documentFallback: input.liveResolve !== false,
+            liveResolve: input.liveResolve !== false,
           },
         },
         ambiguities,

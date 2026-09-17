@@ -13,8 +13,16 @@ export const SPEED = {
   MAX_KEYWORDS_PER_SEARCH: 1,
   /** Per raw-call abort for helpers. */
   CALL_TIMEOUT_MS: 8_000,
-  /** Single optional document-index fallback. */
+  /** Single document-index live resolve / fallback call. */
   FALLBACK_TIMEOUT_MS: 5_000,
+  /** In-process address hits (repeat queries in the same helper session). */
+  ADDRESS_MEMORY_TTL_MS: 15 * 60 * 1000,
+  /** Writable cache in data/address-crosswalk.json (not an ops seed). */
+  ADDRESS_DISK_TTL_MS: 24 * 60 * 60 * 1000,
+  /** Max document types tried for live address (OBJEKTAKTE then MIETERAKTE). */
+  LIVE_RESOLVE_MAX_TYPES: 2,
+  /** Max index rows per document type. */
+  LIVE_RESOLVE_MAX_PER_TYPE: 5,
   /** Catalog list_* first fetch. */
   CATALOG_TIMEOUT_MS: 8_000,
   /** Wall-clock budget for one helper (partial + warning after this). */

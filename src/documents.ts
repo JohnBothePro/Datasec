@@ -265,9 +265,10 @@ export async function listDocumentTypes(opts?: {
 
 /** §2.5.1.9 */
 export async function getDocumentTypeStructure(
-  documentType: string
+  documentType: string,
+  opts?: { timeoutMs?: number }
 ): Promise<DocRestResult> {
-  return restGet(`document-types/${encodeURIComponent(documentType)}/`);
+  return restGet(`document-types/${encodeURIComponent(documentType)}/`, undefined, opts);
 }
 
 export function documentSoapEndpoints() {

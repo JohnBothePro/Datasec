@@ -149,6 +149,9 @@ export function getPartnerMaintenanceIssues(opts: {
 }
 
 /** §2.5.4.2 Newsticker.cfc */
-export function getNewsticker(sPartnerid: string): Promise<SoapResult> {
-  return soapMethod("getNewsticker", { sPartnerid }, { cfc: "Newsticker" });
+export function getNewsticker(
+  sPartnerid: string,
+  opts?: { timeoutMs?: number }
+): Promise<SoapResult> {
+  return soapMethod("getNewsticker", { sPartnerid }, { cfc: "Newsticker", ...opts });
 }

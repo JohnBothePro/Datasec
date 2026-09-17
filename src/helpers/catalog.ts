@@ -186,12 +186,20 @@ async function loadDocTypes(tracker: CallTracker): Promise<CacheEntry> {
   } catch {
     items = parseXmlNamed(text, "doc_types");
   }
+  const fromSyn = listTopicCatalog().document_types ?? [];
+  for (const d of fromSyn) {
+    for (const name of d.types) {
+      items.push({ name, kind: "doc_types", extra: { id: d.id, source: "topic-synonyms" } });
+    }
+  }
   const uniq = uniqueItems(items);
   return stamped(
     uniq,
-    "documents.listDocumentTypes",
-    res.ok,
-    res.ok ? undefined : res.error ?? "listDocumentTypes Timeout/Fehler — kein Retry-Sturm."
+    res.ok && uniq.some((i) => i.extra?.source !== "topic-synonyms")
+      ? "documents.listDocumentTypes + topic-synonyms"
+      : "topic-synonyms (live listDocumentTypes leer/Fehler)",
+    res.ok || uniq.length > 0,
+    res.ok ? undefined : res.error ?? "listDocumentTypes Timeout/Fehler — Synonym-Belegtypen als Fallback."
   );
 }
 

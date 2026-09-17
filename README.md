@@ -21,7 +21,7 @@ Vollständige Tool-Inventar-Datei: **`TOOLS-INVENTORY.md`**.
 | Deep Links Kap. 3 | `datasec_build_deeplink_base/akte/search/document_type/sammelbenutzer` (Token-Embedding default aus, admin+confirm) |
 | SSO Kap. 4 | `datasec_sso_status` (nicht unterstützt V1.7) |
 | Bridge Kap. 1 | `datasec_bridge_info` |
-| **L1 Helpers** | Seconds-latency: `datasec_h_ask` (ein Call, dann antworten), `datasec_h_resolve`, `datasec_h_find_tickets` (max 10), LIGHT `ticket_briefing` / `partner_context`, cached `catalog`. Siehe **`docs/HELPERS.md`**. |
+| **L1 Helpers** | Seconds-latency: `datasec_h_ask` (ein Call, dann antworten). Auto-Adresse aus Datasec (OBJEKTAKTE/MIETERAKTE + Cache). Tickets, Akten, Stammdaten, Katalog, News. Siehe **`docs/HELPERS.md`**. |
 
 Schreiben ist **vollständig implementiert** (nicht „Phase 2“), aber abgesichert:
 
@@ -156,6 +156,7 @@ Oder HTTP-Transport auf `http://127.0.0.1:8788/mcp`.
 | `DATASEC_WRITES_ENABLED` | **`true`** | Schreiben erlauben; `false` sperrt Write-Tools |
 | `DATASEC_REQUIRE_CONFIRM` | `true` | Write-Tools brauchen `confirm: true` |
 | `DATASEC_HELPERS_ENABLED` | **`true`** | `datasec_h_*` Freitext-Helpers; `false` lässt nur Raw-Tools |
+| `DATASEC_ADDRESS_CACHE_PATH` | `data/address-crosswalk.json` | Writable Auto-Adresse-Cache (TTL 24h; Seed optional) |
 | `PORT` | `8788` | HTTP-Port |
 | `HOST` | `0.0.0.0` | HTTP-Bind |
 | `MCP_API_KEY` | — | Fallback-Key (admin, envs test+prod), wenn nicht in keys.json |

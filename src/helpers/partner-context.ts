@@ -53,20 +53,36 @@ export async function partnerContext(
     if (!partnerId && (input.mandant || input.street || input.query || input.houseNumbers)) {
       const resolved = await resolvePlace({
         ...input,
-        allowDocumentFallback: input.allowDocumentFallback === true,
       });
       warnings.push(...(resolved.warnings ?? []));
       if (resolved.raw_calls) tracker.calls.push(...resolved.raw_calls);
       const pids = envelopeData<{ partnerIds: string[] }>(resolved)?.partnerIds ?? [];
-      partnerId = pids[0];
-      if (pids.length > 1) {
-        warnings.push(
-          `Mehrere Partner (${pids.join(", ")}). Kontext für den ersten.`
+      if (pids.length > 1 && !input.partnerId) {
+        return okEnvelope(
+          { candidates: envelopeData(resolved), partnerIds: pids },
+          {
+            warnings: [
+              ...warnings,
+              "Mehrere Partner zur Adresse — kein stilles Picken. Bitte eine Partner-ID wählen.",
+            ],
+            ambiguities: resolved.ambiguities?.length
+              ? resolved.ambiguities
+              : [
+                  {
+                    candidate: pids,
+                    why: "Mehrere Partner zur Adresse — kein stilles Picken.",
+                    score: 0.5,
+                  },
+                ],
+            resolution: resolved.resolution,
+            raw_calls: tracker.calls,
+          }
         );
       }
+      partnerId = pids[0];
       if (!partnerId) {
         return failEnvelope(
-          "Keine Partner-ID: Crosswalk leer oder Adresse nicht auflösbar. getPartnerId ist keine Adresssuche.",
+          "Keine Partner-ID: Live-Adresse ohne Treffer. getPartnerId ist keine Adresssuche.",
           {
             warnings,
             ambiguities: resolved.ambiguities,

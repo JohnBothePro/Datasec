@@ -42,6 +42,74 @@
       "synonyms": ["wasser", "wasserschaden", "rohrbruch", "undicht"],
       "keywords": ["Wasserschaden"],
       "subjectHints": ["*Wasser*", "*Rohrbruch*"]
+    },
+    {
+      "id": "kuendigung",
+      "label": "Kündigung",
+      "synonyms": ["kündigung", "kuendigung", "kündigen", "auszug"],
+      "keywords": ["Kündigung"],
+      "subjectHints": ["*Kündigung*", "*Auszug*"]
+    },
+    {
+      "id": "miete",
+      "label": "Miete",
+      "synonyms": ["miete", "mietrückstand", "mietminderung", "inkasso"],
+      "keywords": ["Miete"],
+      "subjectHints": ["*Miete*", "*Rückstand*"]
+    },
+    {
+      "id": "betriebskosten",
+      "label": "Betriebskosten",
+      "synonyms": ["betriebskosten", "nebenkosten", "bk-abrechnung", "heizkosten"],
+      "keywords": ["Betriebskosten"],
+      "subjectHints": ["*Betriebskosten*", "*Nebenkosten*"]
+    },
+    {
+      "id": "laerm",
+      "label": "Lärm",
+      "synonyms": ["lärm", "laerm", "ruhestörung", "lärmbelästigung"],
+      "keywords": ["Lärm"],
+      "subjectHints": ["*Lärm*", "*Ruhe*"]
+    },
+    {
+      "id": "schluessel",
+      "label": "Schlüssel",
+      "synonyms": ["schlüssel", "schluessel", "schließanlage", "transponder"],
+      "keywords": ["Schlüssel"],
+      "subjectHints": ["*Schlüssel*", "*Schließ*"]
+    }
+  ],
+  "document_types": [
+    {
+      "id": "objektakte",
+      "synonyms": ["objektakte", "liegenschaftsakte", "objekt-akte"],
+      "types": ["OBJEKTAKTE"]
+    },
+    {
+      "id": "mieterakte",
+      "synonyms": ["mieterakte", "mietakte", "mieter-akte"],
+      "types": ["MIETERAKTE"]
+    },
+    {
+      "id": "mietvertrag",
+      "synonyms": ["mietvertrag", "wohnraummietvertrag"],
+      "types": ["MIETERAKTE"]
+    },
+    {
+      "id": "korrespondenz",
+      "synonyms": ["korrespondenz", "schreiben", "briefwechsel"],
+      "types": ["KORRESPONDENZ"]
+    },
+    {
+      "id": "rechnung",
+      "synonyms": ["rechnung", "rechnungen", "eingangsrechnung"],
+      "types": ["RECHNUNG"]
+    },
+    {
+      "id": "ticketanlagen",
+      "synonyms": ["ticketanlage", "ticketanlagen", "anhang", "attachment"],
+      "types": ["TICKETANLAGEN"],
+      "note": "Nur mit TICKETID. Nie TICKETARCHIV."
     }
   ],
   "statuses": [
