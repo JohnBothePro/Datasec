@@ -22,6 +22,13 @@ Freitext-Gehirn für Claude. Raw-Tools (`datasec_*`) bleiben 1:1 unverändert.
 
 Raw `datasec_search_tickets` nur, wenn `ticketnr` / `partnerId` / echtes Keyword **schon klar** sind.
 
+## Claude Connectors — Read vs Write
+
+Helpers und Raw-Tools tragen MCP-`annotations`, damit Claude Connectors **Read** vs **Write** gruppiert (kein 65-Toggle-Klick):
+
+- **Read** → UI-Gruppe **Always allow**: `datasec_h_resolve`, `h_find_tickets`, `h_find_documents`, `h_catalog`, `h_news`, `h_partner_context`, `h_ticket_briefing` (+ alle read-only `datasec_*`).
+- **Write** → UI-Gruppe **Needs approval**: `datasec_h_create_ticket`, `h_add_note`, `h_set_state`, und **`datasec_h_ask`** (kann mit `confirm:true` schreiben).
+
 ## Claude-Skill (L2)
 
 ```

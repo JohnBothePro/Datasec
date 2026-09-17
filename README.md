@@ -123,6 +123,19 @@ Siehe `claude_desktop_config.example.json`. Typisch unter
 
 Remote-Variante (wenn HTTP auf dem PC läuft): Client mit URL `http://127.0.0.1:8788/mcp` konfigurieren.
 
+### Claude Connectors (Read vs Write)
+
+Jedes Tool deklariert MCP-`annotations` (`readOnlyHint` / `destructiveHint`). Claude Connectors gruppiert dann automatisch:
+
+| Gruppe | UI-Empfehlung | Beispiele |
+|--------|----------------|-----------|
+| **Read** (`readOnlyHint: true`) | **Always allow** | Status, Suche, Get, Listen, Deeplinks, Read-Helpers |
+| **Write** (`readOnlyHint: false`, `destructiveHint: true`) | **Needs approval** | create/update/set/link/forward/archive/press/send, `datasec_set_env`, Write-Helpers |
+
+`datasec_h_ask` steht in **Write**, weil es mit `confirm:true` mutieren kann — nicht in Always-allow-Read.
+
+Keine 65 Einzel-Toggles: Read einmal **Always allow**, Write **Needs approval**.
+
 ## Cursor
 
 **Project / User MCP** (`.cursor/mcp.json` oder Cursor Settings → MCP):

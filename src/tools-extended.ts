@@ -10,6 +10,7 @@ import * as documents from "./documents.js";
 import * as stammdaten from "./stammdaten.js";
 import * as deeplink from "./deeplink.js";
 import { bridgeInfo } from "./bridge.js";
+import { ann } from "./tool-annotations.js";
 import {
   canWrite,
   getAuth,
@@ -185,6 +186,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_document",
     {
+      annotations: ann.read(),
       description:
         "Dokument abrufen (REST §2.5.1.1): GET documents/{Belegtyp}/{IndexFeld}/{IndexWert}. Binary → base64. Nur nach expliziter User-Nachfrage / nicht vorsorglich nach Ticket-Lookup.",
       inputSchema: {
@@ -207,6 +209,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_update_document",
     {
+      annotations: ann.write(),
       description:
         "Dokument-Index ändern (SOAP updateIndexValues2 §2.5.1.2). Write+confirm.",
       inputSchema: {
@@ -244,6 +247,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_archive_document_soap",
     {
+      annotations: ann.write(),
       description:
         "Dokument archivieren via SOAP insertDoc2_1 (§2.5.1.3, Base64 + pipe fields). Write+confirm.",
       inputSchema: {
@@ -283,6 +287,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_archive_document_rest",
     {
+      annotations: ann.write(),
       description:
         "Dokument archivieren via REST POST adddocument/{type} (§2.5.1.4). Write+confirm.",
       inputSchema: {
@@ -323,6 +328,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_search_by_document_type",
     {
+      annotations: ann.read(),
       description:
         "In einem Belegtyp suchen (REST §2.5.1.5 indexes/{Belegtyp}/). " +
         "DAS Tool für Ticket-Anlagen: documentType=TICKETANLAGEN, Filter TICKETID=<ticketid aus get_ticket> (nicht TICKETNR), max≤10. " +
@@ -352,6 +358,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_search_in_process",
     {
+      annotations: ann.read(),
       description:
         "In einem Vorgang suchen (REST §2.5.1.6 collection-by-indexes/{Belegtyp}/). " +
         "NIEMALS für TICKETANLAGEN / TICKETARCHIV / ATTACHMENTS — liefert immer HTTP 403. " +
@@ -381,6 +388,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_list_departments",
     {
+      annotations: ann.read(),
       description: "Liste aller Abteilungen (REST §2.5.1.7 departments/).",
       inputSchema: {},
     },
@@ -397,6 +405,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_list_document_types",
     {
+      annotations: ann.read(),
       description: "Liste aller Belegtypen (REST §2.5.1.8 document-types/).",
       inputSchema: {},
     },
@@ -413,6 +422,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_document_type_structure",
     {
+      annotations: ann.read(),
       description: "Struktur eines Belegtyps (REST §2.5.1.9 document-types/{Belegtyp}/).",
       inputSchema: { documentType: z.string() },
     },
@@ -434,6 +444,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_create_master_ticket",
     {
+      annotations: ann.write(),
       description: "Masterticket anlegen (SOAP createMasterTicket §2.5.2.1). Write+confirm.",
       inputSchema: {
         subject: z.string(),
@@ -469,6 +480,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_create_ticket",
     {
+      annotations: ann.write(),
       description: "Ticket anlegen (SOAP createTicket §2.5.2.2). Write+confirm.",
       inputSchema: {
         subject: z.string(),
@@ -502,6 +514,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_link_ticket_to_master",
     {
+      annotations: ann.write(),
       description:
         "Ticket mit Masterticket verknüpfen (SOAP linkTicketToMaster §2.5.2.3). Write+confirm. " +
         "Hinweis: Playbook bevorzugt oft linkTicketToTicket statt Master-Hub.",
@@ -531,6 +544,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_forward_ticket",
     {
+      annotations: ann.write(),
       description: "Ticket weiterleiten (SOAP forwardTicket §2.5.2.4). Write+confirm.",
       inputSchema: {
         ticketnr: z.string(),
@@ -558,6 +572,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_press_process_button",
     {
+      annotations: ann.write(),
       description:
         "Prozessschaltfläche betätigen (SOAP doTicketProcessAction §2.5.2.8). Write+confirm.",
       inputSchema: {
@@ -589,6 +604,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_process_buttons",
     {
+      annotations: ann.read(),
       description: "Prozessschaltflächen abrufen (SOAP getTicketProcessButtons §2.5.2.9). Nur nach expliziter User-Nachfrage / nicht vorsorglich nach Ticket-Lookup.",
       inputSchema: { ticketnr: z.string() },
     },
@@ -609,6 +625,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_process_fields",
     {
+      annotations: ann.read(),
       description: "Prozessfelder abrufen (SOAP getTicketProcessFields §2.5.2.10). Nur nach expliziter User-Nachfrage / nicht vorsorglich nach Ticket-Lookup.",
       inputSchema: { ticketnr: z.string() },
     },
@@ -629,6 +646,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_set_keyword",
     {
+      annotations: ann.write(),
       description: "Ticketschlagwort ändern (SOAP changeTicketKeyword §2.5.2.12). Write+confirm.",
       inputSchema: {
         ticketnr: z.string(),
@@ -666,6 +684,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_set_ticket_values",
     {
+      annotations: ann.write(),
       description: "Ticketwerte setzen (SOAP setTicketValues §2.5.2.15). Write+confirm.",
       inputSchema: {
         ticketnr: z.string(),
@@ -694,6 +713,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_list_keywords",
     {
+      annotations: ann.read(),
       description: "Schlagworte abrufen (SOAP getKeywords §2.5.2.16).",
       inputSchema: {
         channel: z.string().optional().describe("Eingangskanal"),
@@ -716,6 +736,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_process_fields_first_step",
     {
+      annotations: ann.read(),
       description:
         "Prozessfelder des ersten Schritts (SOAP getTicketProcessFieldsFirstStep §2.5.2.18). " +
         "Mit ticketnr → …FirstStepTicketNr. Nur nach expliziter User-Nachfrage / nicht vorsorglich nach Ticket-Lookup.",
@@ -742,6 +763,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_latest_chat_messages",
     {
+      annotations: ann.read(),
       description:
         "Neueste Chat-Nachrichten (SOAP getNewTicketChatNotes §2.5.2.20). Datum YYYY-MM-DD[ HH:MM:SS]. Nur nach expliziter User-Nachfrage / nicht vorsorglich nach Ticket-Lookup.",
       inputSchema: {
@@ -770,6 +792,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_partner_id",
     {
+      annotations: ann.read(),
       description: "Partner-ID abrufen (SOAP getPartnerId §2.5.3.1). sParams als JSON-String.",
       inputSchema: {
         paramsJson: z
@@ -790,6 +813,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_partner_contracts",
     {
+      annotations: ann.read(),
       description: "Verträge eines Partners (SOAP getPartnerContracts §2.5.3.2). sPartner=PARTNER.",
       inputSchema: { partner: z.string().describe("PARTNER-Nummer aus getPartnerId") },
     },
@@ -809,6 +833,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_partner_base_data",
     {
+      annotations: ann.read(),
       description: "Basisdaten Partner (SOAP getPartnerMasterdata §2.5.3.3).",
       inputSchema: { partnerid: z.string().describe("PARTNERID") },
     },
@@ -828,6 +853,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_other_contract_partners_base",
     {
+      annotations: ann.read(),
       description:
         "Basisdaten weiterer Vertragspartner (SOAP getAddPartnersMasterdata §2.5.3.4).",
       inputSchema: { partnerid: z.string() },
@@ -848,6 +874,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_partner_extended_data",
     {
+      annotations: ann.read(),
       description: "Erweiterte Partnerdaten (SOAP getPartnerExtMasterdata §2.5.3.5).",
       inputSchema: { partnerid: z.string() },
     },
@@ -867,6 +894,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_contract_conditions",
     {
+      annotations: ann.read(),
       description: "Vertragskonditionen (SOAP getPartnerConditionsApp §2.5.3.6).",
       inputSchema: { partnerid: z.string() },
     },
@@ -886,6 +914,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_app_users",
     {
+      annotations: ann.read(),
       description: "App-Nutzer abrufen (SOAP getAppUser §2.5.3.7). Pagination via start.",
       inputSchema: {
         start: z.string().optional().describe("Pagination Start (Default 0)"),
@@ -904,6 +933,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_business_partner_data",
     {
+      annotations: ann.read(),
       description: "Geschäftspartnerdaten (SOAP getGPMasterdata §2.5.3.8). sPartner=PARTNER.",
       inputSchema: { partner: z.string() },
     },
@@ -923,6 +953,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_mark_document_read",
     {
+      annotations: ann.write(),
       description: "Beleg als gelesen markieren (SOAP setDocRead §2.5.3.9). Write+confirm.",
       inputSchema: {
         partnerid: z.string(),
@@ -950,6 +981,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_set_app_user_push_flags",
     {
+      annotations: ann.write(),
       description:
         "App-Nutzer-/Push-Kennzeichen setzen (SOAP setGRPfromPartner §2.5.3.10). " +
         "grp: U|UX|P|PX. Write+confirm. partnerid und/oder partner.",
@@ -988,6 +1020,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_update_contact_data",
     {
+      annotations: ann.write(),
       description:
         "Kontaktdaten ändern (SOAP updatePartnerData §2.5.3.11). " +
         "type: MAIL|PHONE|MOBILE|MAIL_INDP|PHONE_INDP|MOBILE_INDP. Write+confirm.",
@@ -1028,6 +1061,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_insert_eed_data",
     {
+      annotations: ann.write(),
       description: "EED-Daten einfügen (SOAP addEEDData §2.5.3.12). Write+confirm.",
       inputSchema: {
         dataJson: z.string().describe("JSON-Payload (Aufbau kundenspezifisch)"),
@@ -1049,6 +1083,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_special_supplementary_data",
     {
+      annotations: ann.read(),
       description: "Spezielle ergänzende Daten (SOAP getSpecialData §2.5.3.13).",
       inputSchema: {
         type: z.string(),
@@ -1072,6 +1107,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_damage_reports",
     {
+      annotations: ann.read(),
       description:
         "Schadensmeldungen (SOAP getPartnerMaintenanceIssues §2.5.4.1). " +
         "partnerid ODER datefrom+dateto (DD.MM.YYYY).",
@@ -1097,6 +1133,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_news_ticker",
     {
+      annotations: ann.read(),
       description: "Newstickermeldungen (SOAP getNewsticker §2.5.4.2, Newsticker.cfc).",
       inputSchema: { partnerid: z.string() },
     },
@@ -1158,6 +1195,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_build_deeplink_base",
     {
+      annotations: ann.read(),
       description: "Deep-Link Basis-URL bauen (Kap. 3.1). Kein Netzwerk.",
       inputSchema: deeplinkAuthFields,
     },
@@ -1175,6 +1213,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_build_deeplink_akte",
     {
+      annotations: ann.read(),
       description: "Deep-Link Akte (Kap. 3.2.2). Kein Netzwerk.",
       inputSchema: {
         ...deeplinkAuthFields,
@@ -1198,6 +1237,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_build_deeplink_search",
     {
+      annotations: ann.read(),
       description: "Deep-Link Suche (Kap. 3.2.3). Kein Netzwerk.",
       inputSchema: {
         ...deeplinkAuthFields,
@@ -1225,6 +1265,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_build_deeplink_document_type",
     {
+      annotations: ann.read(),
       description: "Deep-Link Belegtyp (Kap. 3.2.4). Kein Netzwerk.",
       inputSchema: {
         ...deeplinkAuthFields,
@@ -1255,6 +1296,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_build_deeplink_sammelbenutzer",
     {
+      annotations: ann.read(),
       description: "Deep-Link Sammelbenutzer (Kap. 3.2.5). Kein Netzwerk. Admin+confirm für Token.",
       inputSchema: {
         ...deeplinkAuthFields,
@@ -1283,6 +1325,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_sso_status",
     {
+      annotations: ann.read(),
       description:
         "SSO-Status laut API-Handbuch Kap. 4: nicht unterstützt in DOKU@WEB V1.7.",
       inputSchema: {},
@@ -1302,6 +1345,7 @@ export function registerExtendedTools(server: McpServer): void {
   server.registerTool(
     "datasec_bridge_info",
     {
+      annotations: ann.read(),
       description:
         "Bridge-Info (Kap. 1): Share-Folder-Polling. Optional listPath wenn BRIDGE_SHARE_PATH gesetzt. " +
         "Kein Massen-Upload ohne write+confirm (Upload nicht implementiert).",
