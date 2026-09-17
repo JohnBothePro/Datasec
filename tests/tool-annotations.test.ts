@@ -32,6 +32,15 @@ const WRITE_TOOLS = new Set<string>([
   "datasec_h_set_state",
 ]);
 
+/** Safety net: a new create/update/set/… tool omitted from WRITE_TOOLS must fail CI. */
+function looksLikeWriteName(name: string): boolean {
+  const short = name.replace(/^datasec_/, "");
+  if (short === "h_ask") return true;
+  return /(?:^|_)(?:create|update|set|link|forward|archive|press|send|insert|add_note|mark_document_read)(?:_|$)/.test(
+    short
+  );
+}
+
 async function listTools() {
   const server = createDatasecServer();
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -50,10 +59,16 @@ describe("MCP tool annotations for Claude Connectors", () => {
   });
 
   it("classifies every known tool name as read or write", () => {
-    const unknownWrites = [...WRITE_TOOLS].filter(
-      (name) => !(TOOL_NAMES as readonly string[]).includes(name)
-    );
+    const names = TOOL_NAMES as readonly string[];
+    const unknownWrites = [...WRITE_TOOLS].filter((name) => !names.includes(name));
     assert.deepEqual(unknownWrites, [], "WRITE_TOOLS has names not in TOOL_NAMES");
+
+    const heuristicWrites = names.filter(looksLikeWriteName).sort();
+    assert.deepEqual(
+      heuristicWrites,
+      [...WRITE_TOOLS].sort(),
+      "name heuristic vs WRITE_TOOLS drifted — add the new mutator to WRITE_TOOLS (or except a false positive)"
+    );
   });
 
   it("registers explicit annotations on every tool (read vs write)", async () => {
