@@ -64,7 +64,8 @@ export function registerHelperTools(server: McpServer): boolean {
         "Designed for seconds-latency: EIN Helper-Call, dann antworten — keine Tool-Stürme. " +
         "Auto-Adresse: Document-Index nach Feld-Discovery (keine STREET-404) + Memory/Disk-Cache; Seed nur Override. " +
         "HARD-NO: Straße wird NIE als Ticket-KEYWORD gesucht. getPartnerId ist keine Adresssuche. " +
-        "Writes nur Vorschau bis confirm:true.",
+        "Writes nur Vorschau bis confirm:true. " +
+        "Antwort compact (kleine Treffer, kein raw XML); debug:true für raw_calls.",
       inputSchema: {
         text: z.string().describe("Freitext auf Deutsch"),
         confirm: z
@@ -75,12 +76,16 @@ export function registerHelperTools(server: McpServer): boolean {
         catalogKind: z
           .enum(["keywords", "statuses", "groups", "doc_types", "departments"])
           .optional(),
+        debug: z
+          .boolean()
+          .optional()
+          .describe("Default false: compact envelope. true = raw_calls + raw XML"),
       },
     },
     async (args) => {
       ensureAuthEnv();
       try {
-        return envelopeResult(await ask(args));
+        return envelopeResult(await ask(args), undefined, { debug: args.debug });
       } catch (e) {
         return textResult(
           { ok: false, error: e instanceof Error ? e.message : String(e) },
@@ -100,7 +105,9 @@ export function registerHelperTools(server: McpServer): boolean {
         "Ohne Straßenfelder: Warnung (PARTNERID / Ticketnr / SWENR). Optional SWENR-Filter. " +
         "Treffer in Memory (15min) und data/address-crosswalk.json (24h Cache, kein Ops-Seed). " +
         "Optionaler Seed nur Override/Bootstrap. Mehrere Treffer → ambiguities[], kein stilles Picken. " +
-        "API-Fehler = Warnung + Teilresultat. getPartnerId ist keine Adresssuche. Straße nie KEYWORD.",
+        "API-Fehler = Warnung + Teilresultat. getPartnerId ist keine Adresssuche. Straße nie KEYWORD. " +
+        "Mandant ohne Objekt: PARTNERID-Prefix {mandant}. (explizite Warnung). " +
+        "Antwort compact; debug:true für raw_calls.",
       inputSchema: {
         query: z.string().optional().describe("Freitext mit Straße/Hausnr"),
         mandant: z.string().optional(),
@@ -116,12 +123,13 @@ export function registerHelperTools(server: McpServer): boolean {
           .boolean()
           .optional()
           .describe("Alias für liveResolve (älterer Name)"),
+        debug: z.boolean().optional(),
       },
     },
     async (args) => {
       ensureAuthEnv();
       try {
-        return envelopeResult(await resolvePlace(args));
+        return envelopeResult(await resolvePlace(args), undefined, { debug: args.debug });
       } catch (e) {
         return textResult(
           { ok: false, error: e instanceof Error ? e.message : String(e) },
@@ -137,7 +145,8 @@ export function registerHelperTools(server: McpServer): boolean {
       description:
         "Tickets zu Adresse/Mandant/Thema (seconds-latency: max 10 Treffer, max 4 Partner, max 4 parallele Suchen, 8s Timeout). " +
         "Adresse live aus Datasec (nur existierende Indexfelder), dann PARTNERID + KEYWORD/SUBJECT. " +
-        "Thema Mängel: kein KEYWORD=Mängel (Synonym-Label); SUBJECT-Hints. Straße niemals KEYWORD.",
+        "Thema Mängel: live KEYWORDs mit CATEGORY=Mängel (nie KEYWORD=Mängel ohne Katalog-Treffer). " +
+        "Eine Strategie: Partner-IDs ODER Mandant-Prefix, nie beides. Straße niemals KEYWORD.",
       inputSchema: {
         query: z.string().optional(),
         mandant: z.string().optional(),
@@ -162,12 +171,13 @@ export function registerHelperTools(server: McpServer): boolean {
           .boolean()
           .optional()
           .describe("Alias für liveResolve"),
+        debug: z.boolean().optional().describe("Default false: compact envelope"),
       },
     },
     async (args) => {
       ensureAuthEnv();
       try {
-        return envelopeResult(await findTickets(args));
+        return envelopeResult(await findTickets(args), undefined, { debug: args.debug });
       } catch (e) {
         return textResult(
           { ok: false, error: e instanceof Error ? e.message : String(e) },

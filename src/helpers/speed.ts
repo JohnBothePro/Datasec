@@ -11,6 +11,8 @@ export const SPEED = {
   MAX_SEARCH_CALLS: 4,
   /** Only the first mapped keyword is searched (happy path). */
   MAX_KEYWORDS_PER_SEARCH: 1,
+  /** Live-catalog CATEGORY pick (e.g. Mängel) before the search-job cap. */
+  MAX_CATEGORY_KEYWORDS: 3,
   /** Per raw-call abort for helpers. */
   CALL_TIMEOUT_MS: 8_000,
   /** Single document-index live resolve / fallback call. */

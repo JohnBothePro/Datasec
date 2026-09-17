@@ -70,15 +70,41 @@ function pickStr(row: Record<string, unknown>, keys: string[]): string | undefin
 
 function walkRows(json: unknown): Record<string, unknown>[] {
   if (!json) return [];
+  if (typeof json === "string") {
+    const t = json.trim();
+    if (t.startsWith("{") || t.startsWith("[")) {
+      try {
+        return walkRows(JSON.parse(t));
+      } catch {
+        return [];
+      }
+    }
+    return [];
+  }
   if (Array.isArray(json)) {
+    if (!json.length) return [];
+    if (json.every((x) => Array.isArray(x))) return [];
     return json.flatMap((x) =>
-      x && typeof x === "object" ? [x as Record<string, unknown>] : []
+      x && typeof x === "object" && !Array.isArray(x) ? [x as Record<string, unknown>] : []
     );
   }
   const o = asRecord(json);
   if (!o) return [];
+  const fromSelf = rowsFromColumnOriented(o);
+  if (fromSelf.length) return fromSelf;
   for (const k of ["DATA", "data", "KEYWORDS", "keywords", "ITEMS", "items", "ROWS"]) {
     if (Array.isArray(o[k])) return walkRows(o[k]);
+    if (typeof o[k] === "string") {
+      const nested = walkRows(o[k]);
+      if (nested.length) return nested;
+    }
+    const inner = asRecord(o[k]);
+    if (inner) {
+      const fromCols = rowsFromColumnOriented(inner);
+      if (fromCols.length) return fromCols;
+      const nested = walkRows(inner);
+      if (nested.length) return nested;
+    }
   }
   for (const v of Object.values(o)) {
     if (Array.isArray(v) && v.length && typeof v[0] === "object") {
@@ -86,6 +112,73 @@ function walkRows(json: unknown): Record<string, unknown>[] {
     }
   }
   return [o];
+}
+
+/** ColdFusion serializeJSON query: { KEYWORD: [...], CATEGORY: [...] } or COLUMNS + DATA. */
+export function rowsFromColumnOriented(o: Record<string, unknown>): Record<string, unknown>[] {
+  const columnsRaw = o.COLUMNS ?? o.columns ?? o.ColumnList ?? o.columnList;
+  const data = o.DATA ?? o.data;
+  if (Array.isArray(columnsRaw) && Array.isArray(data) && data.length && Array.isArray(data[0])) {
+    const cols = columnsRaw.map((c) => String(c));
+    return (data as unknown[][]).map((row) => {
+      const rec: Record<string, unknown> = {};
+      cols.forEach((c, i) => {
+        rec[c] = row[i];
+      });
+      return rec;
+    });
+  }
+  const arrayCols = Object.entries(o).filter(
+    ([k, v]) =>
+      Array.isArray(v) &&
+      v.length > 0 &&
+      (typeof v[0] === "string" || typeof v[0] === "number") &&
+      /keyword|category|gruppe|group|name|bezeichnung/i.test(k)
+  );
+  if (!arrayCols.length) return [];
+  const len = Math.max(...arrayCols.map(([, v]) => (v as unknown[]).length));
+  if (!len || len > 20_000) return [];
+  const rows: Record<string, unknown>[] = [];
+  for (let i = 0; i < len; i++) {
+    const rec: Record<string, unknown> = {};
+    for (const [k, v] of arrayCols) rec[k] = (v as unknown[])[i];
+    rows.push(rec);
+  }
+  return rows;
+}
+
+function parseKeywordXml(text: string): CatalogItem[] {
+  const items: CatalogItem[] = [];
+  const selfRe = /<(keyword|item|row)\b([^>]*)\/>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = selfRe.exec(text)) !== null) {
+    const name =
+      /(?:keyword|name|value)="([^"]+)"/i.exec(m[2])?.[1] ?? "";
+    const cat = /(?:category|kategorie)="([^"]+)"/i.exec(m[2])?.[1];
+    if (name.trim()) {
+      items.push({
+        name: collapseWs(name),
+        kind: "keywords",
+        extra: cat ? { category: cat } : undefined,
+      });
+    }
+  }
+  const tagRe = /<(keyword|item|row)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+  while ((m = tagRe.exec(text)) !== null) {
+    const attrName = /(?:keyword|name|value)="([^"]+)"/i.exec(m[2])?.[1];
+    const cat =
+      /(?:category|kategorie)="([^"]+)"/i.exec(m[2])?.[1] ??
+      /<(?:category|kategorie)>([^<]+)<\//i.exec(m[3])?.[1];
+    const innerKw = /<(?:keyword|name)>([^<]+)<\//i.exec(m[3])?.[1];
+    const name = collapseWs(attrName ?? innerKw ?? m[3]);
+    if (!name || /[<>]/.test(name)) continue;
+    items.push({
+      name,
+      kind: "keywords",
+      extra: cat ? { category: collapseWs(cat) } : undefined,
+    });
+  }
+  return uniqueItems(items);
 }
 
 function uniqueItems(items: CatalogItem[]): CatalogItem[] {
@@ -134,11 +227,7 @@ function stamped(
   };
 }
 
-async function loadKeywords(tracker: CallTracker): Promise<CacheEntry> {
-  const res = await tracker.track("getKeywords", () =>
-    soap.getKeywords("", "", { timeoutMs: SPEED.CATALOG_TIMEOUT_MS })
-  );
-  const rows = walkRows(res.json);
+function itemsFromKeywordRows(rows: Record<string, unknown>[]): CatalogItem[] {
   const items: CatalogItem[] = [];
   for (const row of rows) {
     const name = pickStr(row, ["KEYWORD", "keyword", "NAME", "name", "BEZEICHNUNG"]);
@@ -150,18 +239,46 @@ async function loadKeywords(tracker: CallTracker): Promise<CacheEntry> {
     if (grp) extra.group = grp;
     items.push({ name, kind: "keywords", extra: Object.keys(extra).length ? extra : undefined });
   }
-  if (!items.length && typeof res.returnText === "string") {
-    items.push(...parseXmlNamed(res.returnText, "keywords"));
+  return items;
+}
+
+/**
+ * Parse getKeywords SOAP JSON/XML into usable catalog items.
+ * Handles ColdFusion column-oriented queries (common SUCCESS=true + empty items bug).
+ */
+export function parseKeywordCatalog(
+  json: unknown,
+  returnText?: string | null
+): CatalogItem[] {
+  const items = itemsFromKeywordRows(walkRows(json));
+  if (items.length) return uniqueItems(items);
+  const text = typeof returnText === "string" ? returnText : "";
+  if (!text.trim()) return [];
+  if (text.trim().startsWith("{") || text.trim().startsWith("[")) {
+    try {
+      const fromText = itemsFromKeywordRows(walkRows(JSON.parse(text)));
+      if (fromText.length) return uniqueItems(fromText);
+    } catch {
+      /* fall through to XML */
+    }
   }
-  const uniq = uniqueItems(items);
-  return stamped(
-    uniq,
-    "soap.getKeywords",
-    res.ok,
-    res.ok
-      ? undefined
-      : res.errorText ?? "getKeywords Timeout/Fehler — Synonym-Datei bleibt Fallback. Cache kurz, kein Retry-Sturm."
+  const xmlItems = parseKeywordXml(text);
+  if (xmlItems.length) return xmlItems;
+  return uniqueItems(parseXmlNamed(text, "keywords"));
+}
+
+async function loadKeywords(tracker: CallTracker): Promise<CacheEntry> {
+  const res = await tracker.track("getKeywords", () =>
+    soap.getKeywords("", "", { timeoutMs: SPEED.CATALOG_TIMEOUT_MS })
   );
+  const uniq = parseKeywordCatalog(res.json, res.returnText);
+  const warning = res.ok
+    ? uniq.length
+      ? undefined
+      : "getKeywords SOAP OK, aber keine KEYWORD-Zeilen geparst — Synonym-Datei bleibt Fallback."
+    : res.errorText ??
+      "getKeywords Timeout/Fehler — Synonym-Datei bleibt Fallback. Cache kurz, kein Retry-Sturm.";
+  return stamped(uniq, "soap.getKeywords", res.ok && uniq.length > 0, warning);
 }
 
 async function loadDocTypes(tracker: CallTracker): Promise<CacheEntry> {
@@ -351,6 +468,30 @@ export function peekCachedKeywords(): string[] {
   return (cache.get("keywords")?.items ?? []).map((i) => i.name);
 }
 
+export function peekCachedKeywordItems(): CatalogItem[] {
+  return [...(cache.get("keywords")?.items ?? [])];
+}
+
 export function peekCachedNames(kind: CatalogKind): string[] {
   return (cache.get(kind)?.items ?? []).map((i) => i.name);
+}
+
+export function resetCatalogCacheForTests(): void {
+  cache.clear();
+}
+
+export function setCachedKeywordsForTests(items: CatalogItem[]): void {
+  cache.set(
+    "keywords",
+    stamped(uniqueItems(items), "test", true)
+  );
+}
+
+/** Warm or return cached keyword items (one SOAP call on miss). */
+export async function ensureKeywordItems(): Promise<CatalogItem[]> {
+  const hit = cache.get("keywords");
+  if (hit && ageMs(hit)! < hit.ttlMs) return hit.items;
+  const tracker = new CallTracker();
+  const entry = await ensure("keywords", tracker);
+  return entry.items;
 }

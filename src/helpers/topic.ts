@@ -5,6 +5,7 @@
 import { readFileSync } from "node:fs";
 import { foldGerman, collapseWs } from "./normalize.js";
 import { repoFile } from "./envelope.js";
+import { SPEED } from "./speed.js";
 
 export interface TopicEntry {
   id: string;
@@ -160,6 +161,120 @@ export function resolveSearchKeywords(
     );
   }
   return { keywords, warnings };
+}
+
+export interface CatalogKeywordLike {
+  name: string;
+  extra?: Record<string, string>;
+}
+
+function categoryKey(item: CatalogKeywordLike): string {
+  return foldGerman(item.extra?.category ?? item.extra?.CATEGORY ?? "").toLowerCase();
+}
+
+function overlapScore(name: string, needles: string[]): number {
+  const hay = foldGerman(name).toLowerCase();
+  if (!hay) return 0;
+  let score = 0;
+  for (const n of needles) {
+    const k = foldGerman(n.replace(/\*/g, "")).toLowerCase();
+    if (k.length < 3) continue;
+    if (hay.includes(k) || k.includes(hay)) score += k.length;
+  }
+  return score;
+}
+
+/**
+ * Live catalog pick: topic `maengel` → KEYWORDs whose CATEGORY is Mängel.
+ * Never emits KEYWORD=Mängel unless a catalog row has that exact KEYWORD name.
+ */
+export function pickCatalogKeywords(
+  topic: TopicMapping,
+  items: CatalogKeywordLike[],
+  opts?: { query?: string; cap?: number }
+): { keywords: string[]; warnings: string[] } {
+  const warnings: string[] = [];
+  const cap = Math.max(1, opts?.cap ?? SPEED.MAX_CATEGORY_KEYWORDS);
+  const labelKey = topic.label ? foldGerman(topic.label).toLowerCase() : "";
+  const categoryNeedles = [topic.label, topic.topicId]
+    .filter(Boolean)
+    .map((s) => foldGerman(String(s)).toLowerCase());
+
+  const byCategory = items.filter((it) => {
+    const ck = categoryKey(it);
+    if (!ck) return false;
+    return categoryNeedles.some((n) => n && (ck === n || ck.includes(n) || n.includes(ck)));
+  });
+
+  const needles = [
+    opts?.query ?? "",
+    ...topic.subjectHints,
+    topic.input,
+  ].filter(Boolean);
+
+  const ranked = [...byCategory].sort((a, b) => {
+    const diff = overlapScore(b.name, needles) - overlapScore(a.name, needles);
+    if (diff !== 0) return diff;
+    return a.name.localeCompare(b.name, "de");
+  });
+
+  const keywords: string[] = [];
+  for (const it of ranked) {
+    const nk = foldGerman(it.name).toLowerCase();
+    if (!nk) continue;
+    const isLabel = Boolean(labelKey) && nk === labelKey;
+    if (isLabel) continue;
+    if (keywords.some((k) => foldGerman(k).toLowerCase() === nk)) continue;
+    keywords.push(it.name);
+    if (keywords.length >= cap) break;
+  }
+
+  const labelConfirmed = items.some(
+    (it) => foldGerman(it.name).toLowerCase() === labelKey && labelKey
+  );
+  if (labelConfirmed && keywords.length === 0) {
+    keywords.push(
+      topic.label ??
+        items.find((it) => foldGerman(it.name).toLowerCase() === labelKey)!.name
+    );
+  }
+
+  if (topic.topicId === "maengel" && !keywords.includes("Mängel") && !labelConfirmed) {
+    /* keep hard-no: never KEYWORD=Mängel without catalog confirmation */
+  }
+
+  if (!keywords.length && byCategory.length && labelKey) {
+    warnings.push(
+      `Katalog hat CATEGORY='${topic.label}', aber kein KEYWORD außer dem Label — Suche über SUBJECT, nicht KEYWORD='${topic.label}'.`
+    );
+  }
+  return { keywords, warnings };
+}
+
+/** Prefer CATEGORY pick for maengel; otherwise exact names / subject fallback. */
+export function resolveTopicKeywords(
+  topic: TopicMapping,
+  items: CatalogKeywordLike[] = [],
+  opts?: { query?: string; cap?: number }
+): { keywords: string[]; warnings: string[] } {
+  const preferCategory =
+    topic.topicId === "maengel" ||
+    (!topic.keywords.length && Boolean(topic.label) && items.length > 0);
+
+  if (preferCategory && items.length) {
+    const picked = pickCatalogKeywords(topic, items, opts);
+    if (picked.keywords.length) return picked;
+    const names = items.map((i) => i.name);
+    const fallback = resolveSearchKeywords(topic, names);
+    return {
+      keywords: fallback.keywords,
+      warnings: [...picked.warnings, ...fallback.warnings],
+    };
+  }
+  return resolveSearchKeywords(
+    topic,
+    items.map((i) => i.name)
+  );
 }
 
 export interface StatusMapping {

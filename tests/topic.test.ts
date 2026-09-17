@@ -14,8 +14,11 @@ import {
   detectTopicInText,
   mapStatus,
   mapTopic,
+  pickCatalogKeywords,
   resolveSearchKeywords,
+  resolveTopicKeywords,
 } from "../src/helpers/topic.ts";
+import { chooseSearchStrategy } from "../src/helpers/find-tickets.ts";
 
 describe("topic map", () => {
   it("maps Mängel / maengel / mangel to subject hints, not KEYWORD=Mängel", () => {
@@ -45,6 +48,37 @@ describe("topic map", () => {
     const dropped = resolveSearchKeywords(topic, []);
     assert.deepEqual(dropped.keywords, []);
     const confirmed = resolveSearchKeywords(topic, ["Mängel", "Steckdosen defekt"]);
+    assert.deepEqual(confirmed.keywords, ["Mängel"]);
+  });
+
+  it("picks live KEYWORDs whose CATEGORY is Mängel, never KEYWORD=Mängel", () => {
+    const topic = mapTopic("Mängel");
+    const items = [
+      { name: "Abfluss stinkt / riecht", extra: { category: "Mängel" } },
+      { name: "Steckdosen defekt", extra: { category: "Mängel" } },
+      { name: "Reklamation", extra: { category: "Reklamation" } },
+      { name: "Mängel", extra: { category: "Mängel" } },
+    ];
+    const picked = pickCatalogKeywords(topic, items, { query: "Abfluss stinkt", cap: 3 });
+    assert.ok(picked.keywords.includes("Abfluss stinkt / riecht"), JSON.stringify(picked));
+    assert.ok(!picked.keywords.includes("Mängel"), "label must not be used as KEYWORD");
+    assert.ok(!picked.keywords.includes("Reklamation"));
+    const resolved = resolveTopicKeywords(topic, items, { query: "Abfluss" });
+    assert.ok(resolved.keywords.every((k) => k !== "Mängel"));
+    assert.ok(resolved.keywords.length >= 1);
+  });
+
+  it("does not emit KEYWORD=Mängel unless the catalog has that exact KEYWORD", () => {
+    const topic = mapTopic("maengel");
+    const empty = resolveTopicKeywords(topic, []);
+    assert.deepEqual(empty.keywords, []);
+    const categoryOnly = pickCatalogKeywords(topic, [
+      { name: "Abfluss stinkt / riecht", extra: { category: "Mängel" } },
+    ]);
+    assert.deepEqual(categoryOnly.keywords, ["Abfluss stinkt / riecht"]);
+    const confirmed = pickCatalogKeywords(topic, [
+      { name: "Mängel", extra: { category: "Mängel" } },
+    ]);
     assert.deepEqual(confirmed.keywords, ["Mängel"]);
   });
 
@@ -116,6 +150,40 @@ describe("HARD-NO street as KEYWORD", () => {
     assert.ok(jobs.length >= 1);
     assert.ok(jobs.every((j) => j.partnerId && j.keyword === "Mängel"));
     assert.ok(jobs.every((j) => j.keyword !== "Hauptstraße"));
+  });
+
+  it("uses Mandant-prefix OR partnerIds, never both exploding", () => {
+    const both = buildTicketSearchJobs({
+      partnerIds: ["27.27006.15.2.477"],
+      partnerPrefix: "27.",
+      keywords: ["Abfluss stinkt / riecht"],
+      subjectHints: ["*Mangel*"],
+    });
+    assert.equal(both.strategy, "partner_ids");
+    assert.ok(both.jobs.every((j) => j.partnerId && !j.partnerIdPrefix));
+    assert.ok(both.warnings.some((w) => /eine suchstrategie|prefix/i.test(w)));
+
+    const prefixOnly = buildTicketSearchJobs({
+      partnerIds: [],
+      partnerPrefix: "27.",
+      keywords: [],
+      subjectHints: ["*Mangel*"],
+    });
+    assert.equal(prefixOnly.strategy, "mandant_prefix");
+    assert.equal(prefixOnly.jobs.length, 1);
+    assert.equal(prefixOnly.jobs[0].partnerIdPrefix, "27.");
+    assert.equal(prefixOnly.jobs[0].subjectLike, "*Mangel*");
+    assert.ok(!prefixOnly.jobs[0].keyword);
+
+    assert.equal(
+      chooseSearchStrategy({
+        partnerIds: ["x"],
+        partnerPrefix: "27.",
+        keywords: ["k"],
+        subjectHints: [],
+      }),
+      "partner_ids"
+    );
   });
 
   it("caps fan-out (partners × keywords) for seconds-latency", () => {

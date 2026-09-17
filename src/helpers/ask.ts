@@ -191,6 +191,8 @@ export interface AskInput {
   confirm?: boolean;
   include?: BriefingInclude[];
   catalogKind?: CatalogKind;
+  /** Keep raw_calls + raw XML. Default compact (Outlook-like). */
+  debug?: boolean;
 }
 
 export async function ask(input: AskInput): Promise<HelperEnvelope> {
@@ -328,6 +330,7 @@ export async function ask(input: AskInput): Promise<HelperEnvelope> {
         ticketnr: parsed.ticketnr,
         partnerIds: parsed.partnerId ? [parsed.partnerId] : undefined,
         limit: SPEED.MAX_RESULTS,
+        debug: input.debug,
       });
       break;
   }

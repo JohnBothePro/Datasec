@@ -27,6 +27,11 @@ import {
   type ParsedAddress,
 } from "./normalize.js";
 import { SPEED } from "./speed.js";
+import {
+  lookupStreetPartnerIndex,
+  partnerIdsFromIndexEntries,
+  resetStreetPartnerIndexForTests,
+} from "./street-partner-index.js";
 
 export const MAX_PARTNERS = SPEED.MAX_PARTNERS;
 
@@ -41,7 +46,14 @@ export interface AddressHit {
   partner?: string;
   label: string;
   score: number;
-  source: "seed" | "crosswalk" | "document_index" | "memory_cache" | "disk_cache";
+  source:
+    | "seed"
+    | "crosswalk"
+    | "document_index"
+    | "memory_cache"
+    | "disk_cache"
+    | "street_partner_index"
+    | "mandant_prefix";
 }
 
 export interface CrosswalkEntry {
@@ -114,6 +126,21 @@ const DEFAULT_LIVE: DocumentLiveCfg = {
 
 const NO_STREET_FIELDS_WARNING =
   "Datasec-Index hat keine Straßenfelder; Adresse kann so nicht aufgelöst werden; bitte PARTNERID / Ticketnr / SWENR.";
+
+/** PARTNERID like 27.27006.15.2.477 — first segment is Mandant/Gesellschaft. */
+export function mandantPartnerPrefix(mandant: string | undefined | null): string | undefined {
+  const m = String(mandant ?? "").trim();
+  if (!/^\d{1,8}$/.test(m)) return undefined;
+  return `${m}.`;
+}
+
+export function mandantPrefixWarning(prefix: string): string {
+  return `Mandant-Prefix-Scope: PARTNERID beginnt mit '${prefix}' — kein einzelnes Objekt, Suche unter Gesellschaft (nicht still).`;
+}
+
+export function streetUnboundWarning(street: string, prefix: string): string {
+  return `Straße '${street}' konnte nicht auf ein Objekt gebunden werden. Ticket-Suche unter Mandant-Prefix ${prefix} (kein stilles Objekt-Picken).`;
+}
 
 const STRUCTURE_SKIP = new Set([
   "ITEM",
@@ -191,6 +218,7 @@ export function resetAddressCachesForTests(): void {
   cachedFile = null;
   memoryCache.clear();
   structureCache.clear();
+  resetStreetPartnerIndexForTests();
 }
 
 /** Index field names from getDocumentTypeStructure XML/JSON. */
@@ -628,6 +656,56 @@ export function normalizeResolveInput(input: ResolvePlaceInput): {
   };
 }
 
+function hitsFromStreetIndex(
+  norm: { mandant?: string; street?: string; houseNumbers: string[] }
+): AddressHit[] {
+  const entries = lookupStreetPartnerIndex(norm);
+  const hits: AddressHit[] = [];
+  for (const e of entries) {
+    const pids = partnerIdsFromIndexEntries([e]);
+    for (const partnerId of pids) {
+      const house = e.houseNo ?? e.houseNos?.[0];
+      hits.push({
+        mandantId: e.mandantId ?? norm.mandant,
+        street: e.street ?? norm.street ?? "",
+        houseNo: house,
+        partnerId,
+        label:
+          e.label ??
+          [e.street, house, e.mandantId ? `Mandant ${e.mandantId}` : "", partnerId]
+            .filter(Boolean)
+            .join(" · "),
+        score: 0.7,
+        source: "street_partner_index",
+      });
+    }
+  }
+  return hits;
+}
+
+function applyMandantPrefixScope(
+  extras: {
+    norm: ReturnType<typeof normalizeResolveInput>;
+    warnings: string[];
+    source: string;
+  },
+  partnerIds: string[]
+): { partnerPrefix: string | null; mode: string; streetBound: boolean } {
+  if (partnerIds.length) {
+    return { partnerPrefix: null, mode: extras.source, streetBound: true };
+  }
+  const prefix = mandantPartnerPrefix(extras.norm.mandant);
+  if (!prefix) {
+    return { partnerPrefix: null, mode: extras.source, streetBound: false };
+  }
+  extras.warnings.push(mandantPrefixWarning(prefix));
+  if (extras.norm.street) {
+    extras.warnings.push(streetUnboundWarning(extras.norm.street, prefix));
+  }
+  extras.source = "mandant_prefix";
+  return { partnerPrefix: prefix, mode: "mandant_prefix", streetBound: false };
+}
+
 function finishHits(
   hits: AddressHit[],
   extras: {
@@ -661,8 +739,15 @@ function finishHits(
     });
   }
 
+  const scope = applyMandantPrefixScope(extras, partnerIds.slice(0, MAX_PARTNERS));
+
   return okEnvelope(
-    { hits, partnerIds: partnerIds.slice(0, MAX_PARTNERS) },
+    {
+      hits,
+      partnerIds: partnerIds.slice(0, MAX_PARTNERS),
+      partnerPrefix: scope.partnerPrefix,
+      mode: scope.mode,
+    },
     {
       resolution: {
         mandant: extras.norm.mandant ?? null,
@@ -670,6 +755,9 @@ function finishHits(
         houseNumbers: extras.norm.houseNumbers,
         weNr: extras.norm.weNr ?? null,
         source: extras.source,
+        mode: scope.mode,
+        partnerPrefix: scope.partnerPrefix,
+        streetBound: scope.streetBound,
         crosswalkEntries: extras.stats.entryCount,
         getPartnerId: "not_used",
         streetAsKeyword: false,
@@ -746,6 +834,20 @@ export async function resolvePlace(input: ResolvePlaceInput): Promise<HelperEnve
         ambiguities,
         tracker,
         liveUsed: "skipped",
+        stats,
+      });
+    }
+
+    const indexHits = hitsFromStreetIndex(norm);
+    if (indexHits.length) {
+      memoryCache.set(key, { hits: indexHits, at: nowMs(deps) });
+      return finishHits(indexHits, {
+        norm,
+        source: "street_partner_index",
+        warnings,
+        ambiguities,
+        tracker,
+        liveUsed: "cached",
         stats,
       });
     }

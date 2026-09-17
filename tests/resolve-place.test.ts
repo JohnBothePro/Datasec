@@ -291,4 +291,42 @@ describe("live address resolve from Datasec", () => {
     assert.equal(calls, 0);
     assert.equal(r.resolution.streetAsKeyword, false);
   });
+
+  it("mandant + unresolved street becomes first-class PARTNERID prefix scope", async () => {
+    const r = await resolvePlace({
+      mandant: "27",
+      street: "Hauptstraße",
+      houseNumbers: "118",
+      liveResolve: false,
+      deps: liveDeps(async () => okDoc(xmlItems([]))),
+    });
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.data?.partnerIds ?? [], []);
+    assert.equal(r.data?.partnerPrefix, "27.");
+    assert.equal(r.data?.mode, "mandant_prefix");
+    assert.equal(r.resolution.mode, "mandant_prefix");
+    assert.equal(r.resolution.partnerPrefix, "27.");
+    assert.equal(r.resolution.streetBound, false);
+    assert.equal(r.resolution.streetAsKeyword, false);
+    assert.ok(
+      (r.warnings ?? []).some((w) => /Mandant-Prefix-Scope|PARTNERID beginnt mit '27\.'/i.test(w)),
+      JSON.stringify(r.warnings)
+    );
+    assert.ok(
+      (r.warnings ?? []).some((w) => /nicht auf ein Objekt gebunden/i.test(w)),
+      JSON.stringify(r.warnings)
+    );
+  });
+
+  it("does not invent partners from empty street-partner-index hook", async () => {
+    const r = await resolvePlace({
+      mandant: "27",
+      street: "Unbekannte Straße",
+      houseNumbers: "1",
+      liveResolve: false,
+    });
+    assert.equal(r.ok, true);
+    assert.deepEqual(r.data?.partnerIds ?? [], []);
+    assert.equal(r.data?.partnerPrefix, "27.");
+  });
 });
