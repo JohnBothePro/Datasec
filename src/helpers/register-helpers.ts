@@ -59,8 +59,9 @@ export function registerHelperTools(server: McpServer): boolean {
     {
       description:
         "HAUPT-EINSTIEG für deutschen Freitext (Adresse/Mandant/Thema). " +
+        "Designed for seconds-latency: ein Helper-Call, dann antworten — keine Tool-Stürme, kein Multi-Hop außer der User fragt. " +
         "Beispiel: „Mängel Mandant 27 Hauptstraße 118/118a/118b“. " +
-        "Router (Heuristik, kein LLM): find_tickets / briefing / resolve / Katalog / Dokumente / Partner / guided writes. " +
+        "Router (Heuristik, kein LLM). Default max 10, Crosswalk statt Live-Crawl, LIGHT briefing. " +
         "HARD-NO: Straße wird NIE als Ticket-KEYWORD gesucht. getPartnerId ist keine Adresssuche. " +
         "Writes nur Vorschau bis confirm:true.",
       inputSchema: {
@@ -92,10 +93,9 @@ export function registerHelperTools(server: McpServer): boolean {
     "datasec_h_resolve",
     {
       description:
-        "Mandant + Adresse → Partner/Objekt-Kandidaten. Primär lokaler Crosswalk " +
-        "(data/address-crosswalk.json); optional Document-Index-Fallback. " +
-        "Leerer Crosswalk = klare Warnung, kein stilles KEYWORD-Raten. " +
-        "getPartnerId wird NICHT als Adresssuche verwendet.",
+        "Mandant + Adresse → Partner (seconds-latency). Primär lokaler Crosswalk — kein Live-Crawl im Happy Path. " +
+        "allowDocumentFallback=true: genau eine kurze Index-Suche. " +
+        "Leerer Crosswalk = klare Warnung, kein stilles KEYWORD-Raten. getPartnerId ist keine Adresssuche.",
       inputSchema: {
         query: z.string().optional().describe("Freitext mit Straße/Hausnr"),
         mandant: z.string().optional(),
@@ -123,9 +123,8 @@ export function registerHelperTools(server: McpServer): boolean {
     "datasec_h_find_tickets",
     {
       description:
-        "Tickets über Adresse/Mandant/Thema. Intern: resolve → search_tickets " +
-        "(PARTNERID + KEYWORD/SUBJECT, Fan-out gedeckelt, Dedupe). " +
-        "HARD-NO: Straße niemals in KEYWORD. Bei leerem Crosswalk Warnung statt stiller 0-Treffer-Rate.",
+        "Tickets zu Adresse/Mandant/Thema (seconds-latency: max 10 Treffer, max 4 Partner, max 4 parallele Suchen, 8s Timeout). " +
+        "Crosswalk zuerst; Straße niemals KEYWORD. Ein Call, dann antworten — nicht weiter explorieren.",
       inputSchema: {
         query: z.string().optional(),
         mandant: z.string().optional(),
@@ -137,8 +136,18 @@ export function registerHelperTools(server: McpServer): boolean {
         keyword: z.string().optional().describe("Nur echtes Schlagwort, keine Straße"),
         status: z.string().optional().describe("z.B. offen — wird gemappt"),
         ticketnr: z.string().optional(),
-        limit: z.number().int().min(1).max(50).optional(),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(10)
+          .optional()
+          .describe("Default 10, hart ≤10"),
         start: z.number().int().min(1).optional(),
+        allowDocumentFallback: z
+          .boolean()
+          .optional()
+          .describe("Default false. true = eine kurze Document-Index-Suche"),
       },
     },
     async (args) => {
@@ -158,8 +167,9 @@ export function registerHelperTools(server: McpServer): boolean {
     "datasec_h_ticket_briefing",
     {
       description:
-        "Ein Call: Ticket plus optional Notizen/Links/Historie/Anlagen/Buttons/Chat. " +
-        "Anlagen ausschließlich TICKETANLAGEN + TICKETID (nie TICKETARCHIV).",
+        "LIGHT default: nur Ticket-Kern (seconds-latency). " +
+        "notes/links/history/attachments NUR bei explizitem include — nie automatisch ketten. " +
+        "Anlagen: TICKETANLAGEN + TICKETID (nie TICKETARCHIV).",
       inputSchema: {
         ticketnr: z.string(),
         include: includeBriefing,
@@ -184,8 +194,8 @@ export function registerHelperTools(server: McpServer): boolean {
     "datasec_h_catalog",
     {
       description:
-        "Gecachte Kataloge: keywords, statuses, groups, doc_types, departments. " +
-        "Verhindert, dass Claude 491 Schlagworte raten muss.",
+        "In-Memory-Katalog (TTL 24h): keywords/statuses/groups/doc_types/departments. " +
+        "list_* wird nicht bei jedem Call getroffen. Seconds-latency nach Warm-Cache.",
       inputSchema: {
         kind: z.enum(["keywords", "statuses", "groups", "doc_types", "departments"]),
         filter: z.string().optional().describe("Teilstring, z.B. Mäng"),
@@ -208,8 +218,9 @@ export function registerHelperTools(server: McpServer): boolean {
     "datasec_h_partner_context",
     {
       description:
-        "Partner-Kontext (Stammdaten, optional Verträge/Schäden/offene Tickets) in einem Call. " +
-        "Adresse über Crosswalk, nicht getPartnerId.",
+        "LIGHT default: nur Stammdaten (base). " +
+        "extended/contracts/open_tickets/Schäden nur bei explizitem include — kein Auto-Chain. " +
+        "Adresse über Crosswalk, nicht getPartnerId. Seconds-latency.",
       inputSchema: {
         partnerId: z.string().optional(),
         partner: z.string().optional().describe("PARTNER-Nummer für Verträge"),
@@ -249,7 +260,8 @@ export function registerHelperTools(server: McpServer): boolean {
     "datasec_h_find_documents",
     {
       description:
-        "Dokument-/Aktensuche. Ticket-Anlagen: TICKETANLAGEN + TICKETID. TICKETARCHIV gesperrt.",
+        "Dokument-/Aktensuche (eine Belegtyp-Suche, max 10, 8s Timeout). " +
+        "Ticket-Anlagen: TICKETANLAGEN + TICKETID. TICKETARCHIV gesperrt. Seconds-latency.",
       inputSchema: {
         query: z.string().optional(),
         documentType: z.string().optional(),

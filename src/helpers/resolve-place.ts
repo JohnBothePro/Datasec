@@ -22,8 +22,9 @@ import {
   streetKey,
   type ParsedAddress,
 } from "./normalize.js";
+import { SPEED } from "./speed.js";
 
-export const MAX_PARTNERS = 8;
+export const MAX_PARTNERS = SPEED.MAX_PARTNERS;
 
 export interface AddressHit {
   mandantId?: string;
@@ -78,15 +79,15 @@ interface CrosswalkFile {
 let cachedFile: CrosswalkFile | null = null;
 
 const DEFAULT_FALLBACK: DocumentFallbackCfg = {
-  enabled: true,
-  document_types: ["OBJEKTAKTE", "MIETERAKTE"],
+  enabled: false,
+  document_types: ["OBJEKTAKTE"],
   street_fields: ["STREET", "GE_STREET", "STRASSE"],
   house_fields: ["HAUSNR", "HOUSENO", "HSNR", "HAUSNUMMER"],
   partner_fields: ["PARTNERID", "PARTNER", "MIETERID"],
   mandant_fields: ["MANDANT", "MANDANTID", "FIRMA"],
   objekt_fields: ["OBJEKTID", "OBJEKT", "WE", "WENR"],
-  max_types: 2,
-  max_per_type: 10,
+  max_types: 1,
+  max_per_type: 5,
 };
 
 export function loadCrosswalk(force = false): CrosswalkFile {
@@ -235,13 +236,17 @@ async function documentFallback(
 ): Promise<{ hits: AddressHit[]; warnings: string[] }> {
   const warnings: string[] = [];
   const hits: AddressHit[] = [];
-  const types = cfg.document_types.slice(0, cfg.max_types);
+  const types = cfg.document_types.slice(0, 1);
   if (!types.length) {
     warnings.push("Document-Index-Fallback: keine Belegtypen konfiguriert.");
     return { hits, warnings };
   }
 
-  for (const documentType of types) {
+  const documentType = types[0];
+  warnings.push(
+    `Document-Index-Fallback: genau eine gezielte Suche (${documentType}, ${SPEED.FALLBACK_TIMEOUT_MS}ms). Crosswalk bevorzugen.`
+  );
+  {
     const streetField = cfg.street_fields[0];
     const filters: RestFilter[] = [
       { field: streetField, op: "like", val: `*${input.street}*`, con: "AND" },
@@ -259,16 +264,17 @@ async function documentFallback(
         documents.searchByDocumentType({
           documentType,
           start: 1,
-          max: cfg.max_per_type,
+          max: Math.min(cfg.max_per_type, 5),
           filters,
+          timeoutMs: SPEED.FALLBACK_TIMEOUT_MS,
         }),
       documentType
     );
     if (!res.ok) {
       warnings.push(
-        `Document-Index-Fallback ${documentType}: ${res.error ?? `HTTP ${res.httpStatus}`}`
+        `Document-Index-Fallback ${documentType} abgebrochen/fehlgeschlagen (${res.error ?? `HTTP ${res.httpStatus}`}) — Teilresultat, kein Hänger.`
       );
-      continue;
+      return { hits, warnings };
     }
     const rows = parseIndexRecords(res.text ?? "");
     for (const row of rows) {
@@ -386,15 +392,14 @@ export async function resolvePlace(
     }
 
     const wantFallback =
-      input.allowDocumentFallback !== false &&
+      input.allowDocumentFallback === true &&
       Boolean(file.document_index_fallback?.enabled) &&
       Boolean(norm.street) &&
       hits.length === 0;
 
     if (wantFallback && norm.street) {
       warnings.push(
-        "Kein Crosswalk-Treffer — optionaler Document-Index-Fallback (OBJEKTAKTE/MIETERAKTE). " +
-          "Nicht getPartnerId."
+        "Kein Crosswalk-Treffer — eine gezielte Document-Index-Suche (kurz, Timeout). Nicht getPartnerId."
       );
       const fb = await documentFallback(
         {
@@ -407,9 +412,10 @@ export async function resolvePlace(
       );
       hits.push(...fb.hits);
       warnings.push(...fb.warnings);
-    } else if (stats.empty && !wantFallback) {
+    } else if (hits.length === 0 && norm.street) {
       warnings.push(
-        "Keine Partner auflösbar: leerer Crosswalk und Document-Fallback nicht genutzt/ohne Straße."
+        "Keine Partner aus dem Crosswalk. Live-Document-Crawl ist opt-in " +
+          "(allowDocumentFallback:true) und auf eine kurze Suche begrenzt — Happy Path bleibt lokal/schnell."
       );
     }
 
@@ -453,6 +459,11 @@ export async function resolvePlace(
           crosswalkEntries: stats.entryCount,
           getPartnerId: "not_used",
           streetAsKeyword: false,
+          speed: {
+            maxPartners: MAX_PARTNERS,
+            documentFallback: wantFallback ? "one_shot" : "skipped",
+            preferCrosswalk: true,
+          },
         },
         ambiguities,
         warnings,

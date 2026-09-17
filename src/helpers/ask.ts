@@ -25,6 +25,7 @@ import {
   createTicketGuided,
   setStateGuided,
 } from "./write-guided.js";
+import { SPEED } from "./speed.js";
 
 export type AskIntent =
   | "find_tickets"
@@ -211,6 +212,7 @@ export async function ask(input: AskInput): Promise<HelperEnvelope> {
         street: parsed.street,
         houseNumbers: parsed.houseNumbers,
         partnerIds: parsed.partnerId ? [parsed.partnerId] : undefined,
+        allowDocumentFallback: false,
       });
       break;
     case "catalog":
@@ -287,6 +289,8 @@ export async function ask(input: AskInput): Promise<HelperEnvelope> {
         status: parsed.status,
         ticketnr: parsed.ticketnr,
         partnerIds: parsed.partnerId ? [parsed.partnerId] : undefined,
+        limit: SPEED.MAX_RESULTS,
+        allowDocumentFallback: false,
       });
       break;
   }
@@ -297,6 +301,7 @@ export async function ask(input: AskInput): Promise<HelperEnvelope> {
       inner: inner.resolution,
       streetAsKeyword: false,
       router: "heuristics/regex (no LLM)",
+      speed: "one helper call, then answer; seconds-latency",
     },
     ambiguities: inner.ambiguities,
     warnings: [

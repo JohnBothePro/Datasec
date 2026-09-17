@@ -4,7 +4,11 @@ import { parseAsk } from "../src/helpers/ask.ts";
 import {
   assertNotStreetKeyword,
   buildTicketSearchJobs,
+  MAX_SEARCH_CALLS,
 } from "../src/helpers/find-tickets.ts";
+import { DEFAULT_PARTNER_INCLUDE } from "../src/helpers/partner-context.ts";
+import { MAX_PARTNERS } from "../src/helpers/resolve-place.ts";
+import { SPEED, clampResults } from "../src/helpers/speed.ts";
 import { resolvePlace } from "../src/helpers/resolve-place.ts";
 import {
   detectTopicInText,
@@ -74,6 +78,20 @@ describe("HARD-NO street as KEYWORD", () => {
     assert.ok(jobs.every((j) => j.partnerId && j.keyword === "Mängel"));
     assert.ok(jobs.every((j) => j.keyword !== "Hauptstraße"));
   });
+
+  it("caps fan-out (partners × keywords) for seconds-latency", () => {
+    assert.ok(SPEED.MAX_RESULTS <= 10);
+    assert.ok(MAX_PARTNERS <= 4);
+    assert.ok(MAX_SEARCH_CALLS <= 4);
+    assert.equal(clampResults(99), 10);
+    const { jobs } = buildTicketSearchJobs({
+      partnerIds: ["1", "2", "3", "4", "5", "6"],
+      keywords: ["Mängel", "Heizung", "Wasser"],
+      subjectHints: [],
+    });
+    assert.ok(jobs.length <= MAX_SEARCH_CALLS);
+    assert.ok(jobs.every((j) => j.keyword === "Mängel"));
+  });
 });
 
 describe("ask router (no LLM)", () => {
@@ -91,6 +109,12 @@ describe("ask router (no LLM)", () => {
     assert.equal(p.intent, "ticket_briefing");
     assert.equal(p.ticketnr, "32-260907-Q0009");
     assert.ok(p.include?.includes("notes"));
+  });
+
+  it("ticketnr alone stays LIGHT (no auto notes/links)", () => {
+    const p = parseAsk("32-260907-Q0009");
+    assert.equal(p.intent, "ticket_briefing");
+    assert.equal(p.include, undefined);
   });
 
   it("routes create intent without executing", () => {
@@ -115,5 +139,15 @@ describe("empty crosswalk", () => {
     );
     assert.equal(r.resolution.streetAsKeyword, false);
     assert.equal(r.resolution.getPartnerId, "not_used");
+    assert.equal(
+      (r.resolution.speed as { documentFallback?: string } | undefined)?.documentFallback,
+      "skipped"
+    );
+  });
+});
+
+describe("lean defaults", () => {
+  it("partner_context default is base only", () => {
+    assert.deepEqual(DEFAULT_PARTNER_INCLUDE, ["base"]);
   });
 });

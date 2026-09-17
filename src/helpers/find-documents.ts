@@ -10,9 +10,10 @@ import {
   okEnvelope,
   type HelperEnvelope,
 } from "./envelope.js";
-import { getCatalog } from "./catalog.js";
+import { getCatalog, peekCachedNames } from "./catalog.js";
 import { mapTopic } from "./topic.js";
 import { foldGerman } from "./normalize.js";
+import { SPEED, clampResults } from "./speed.js";
 
 export interface FindDocumentsInput {
   query?: string;
@@ -62,7 +63,9 @@ export async function findDocuments(
 
     let ticketid: string | undefined;
     if (input.ticketnr) {
-      const t = await tracker.track("get_ticket", () => rest.getTicketByNr(input.ticketnr!));
+      const t = await tracker.track("get_ticket", () =>
+        rest.getTicketByNr(input.ticketnr!, { timeoutMs: SPEED.CALL_TIMEOUT_MS })
+      );
       ticketid = t.ticket?.ticketid;
       if (!ticketid) {
         warnings.push(
@@ -71,12 +74,19 @@ export async function findDocuments(
       }
     }
 
-    const catalog = await getCatalog("doc_types", input.query);
-    if (catalog.raw_calls) tracker.calls.push(...catalog.raw_calls);
-    const catalogNames =
-      (
-        catalog.data as { items?: Array<{ name: string }> } | null
-      )?.items?.map((i) => i.name) ?? [];
+    const knownType = Boolean(input.documentType) ||
+      /anlage|anhang/i.test(input.query ?? "") ||
+      Boolean(input.ticketnr);
+
+    let catalogNames: string[] = [];
+    if (!knownType) {
+      const catalog = await getCatalog("doc_types", input.query);
+      if (catalog.raw_calls) tracker.calls.push(...catalog.raw_calls);
+      catalogNames =
+        (
+          catalog.data as { items?: Array<{ name: string }> } | null
+        )?.items?.map((i) => i.name) ?? peekCachedNames("doc_types");
+    }
 
     const mapped = input.documentType
       ? { types: [input.documentType], note: "explizit" }
@@ -108,10 +118,10 @@ export async function findDocuments(
       );
     }
 
-    const max = Math.min(Math.max(input.max ?? 10, 1), 30);
+    const max = clampResults(input.max);
     const results: Array<Record<string, unknown>> = [];
 
-    for (const documentType of types.slice(0, 3)) {
+    for (const documentType of types.slice(0, 1)) {
       const filters: RestFilter[] = [...(input.filters ?? [])];
       if (documentType.toUpperCase() === "TICKETANLAGEN") {
         if (ticketid) {
@@ -137,6 +147,7 @@ export async function findDocuments(
             start: 1,
             max,
             filters,
+            timeoutMs: SPEED.CALL_TIMEOUT_MS,
           }),
         documentType
       );

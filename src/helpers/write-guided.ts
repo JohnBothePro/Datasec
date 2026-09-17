@@ -96,6 +96,7 @@ export async function createTicketGuided(
         mandant: input.mandant,
         street: input.street,
         houseNumbers: input.houseNumbers,
+        allowDocumentFallback: false,
       });
       if (resolved.raw_calls) tracker.calls.push(...resolved.raw_calls);
       warnings.push(...(resolved.warnings ?? []));

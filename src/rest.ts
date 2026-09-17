@@ -96,6 +96,8 @@ export async function searchTickets(opts: {
   sort?: string;
   dir?: "asc" | "desc";
   filters?: RestFilter[];
+  /** Abort after this many ms. Default 25s (raw tools). Helpers pass a shorter value. */
+  timeoutMs?: number;
 }): Promise<TicketListResult> {
   const token = session.getToken();
   const start = opts.start ?? 1;
@@ -124,7 +126,7 @@ export async function searchTickets(opts: {
 
   const url = `${session.restBase}tickets/?${buildQuery(params)}`;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25_000);
+  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 25_000);
 
   try {
     const res = await fetch(url, { method: "GET", signal: controller.signal });
@@ -167,7 +169,10 @@ export async function searchTickets(opts: {
   }
 }
 
-export async function getTicketByNr(ticketnr: string): Promise<{
+export async function getTicketByNr(
+  ticketnr: string,
+  opts?: { timeoutMs?: number }
+): Promise<{
   ok: boolean;
   ticket: TicketSummary | null;
   error?: string;
@@ -177,6 +182,7 @@ export async function getTicketByNr(ticketnr: string): Promise<{
     start: 1,
     max: 10,
     filters: [{ field: "TICKETNR", op: "=", val: ticketnr }],
+    timeoutMs: opts?.timeoutMs,
   });
   if (!list.ok) {
     return { ok: false, ticket: null, error: list.error, listMeta: list };
@@ -193,7 +199,7 @@ export async function getTicketByNr(ticketnr: string): Promise<{
   }
 
   if (hit.ticketid) {
-    const detail = await getTicketDetail(hit.ticketid);
+    const detail = await getTicketDetail(hit.ticketid, { timeoutMs: opts?.timeoutMs });
     if (detail.ok && detail.ticket) {
       return { ok: true, ticket: { ...hit, ...detail.ticket }, listMeta: list };
     }
@@ -201,7 +207,10 @@ export async function getTicketByNr(ticketnr: string): Promise<{
   return { ok: true, ticket: hit, listMeta: list };
 }
 
-export async function getTicketDetail(ticketid: string): Promise<{
+export async function getTicketDetail(
+  ticketid: string,
+  opts?: { timeoutMs?: number }
+): Promise<{
   ok: boolean;
   httpStatus: number;
   ticket: TicketSummary | null;
@@ -213,7 +222,7 @@ export async function getTicketDetail(ticketid: string): Promise<{
     authtoken: token,
   })}`;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 60_000);
+  const timer = setTimeout(() => controller.abort(), opts?.timeoutMs ?? 60_000);
   try {
     const res = await fetch(url, { method: "GET", signal: controller.signal });
     const text = await res.text();

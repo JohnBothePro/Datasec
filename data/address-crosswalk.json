@@ -5,7 +5,7 @@
     "getPartnerId (SOAP §2.5.3.1) ist KEINE Adresssuche — typisch Vertrag + Geburtsdatum. Niemals dafür missbrauchen.",
     "Straße darf NIEMALS in die Ticket-KEYWORD-Suche.",
     "Leere entries[] → Helper warnt klar und sucht nicht still über KEYWORD.",
-    "Optionaler Fallback: document_index_fallback sucht Belegtypen (OBJEKTAKTE/MIETERAKTE) nach Straßen-Indexfeldern.",
+    "Optionaler Fallback nur opt-in (allowDocumentFallback): genau eine kurze Index-Suche. Happy Path = lokaler Crosswalk.",
     "Befüllung: Wodis-/ERP-Export (CSV→JSON) und/oder einmaliger Crawl der Objekt-/Mieterakten."
   ],
   "ops_still_needed": [
@@ -15,15 +15,15 @@
     "Welche Partner-ID steht auf dem Ticket (PARTNERID vs. PARTNER-Nummer)?"
   ],
   "document_index_fallback": {
-    "enabled": true,
-    "document_types": ["OBJEKTAKTE", "MIETERAKTE"],
+    "enabled": false,
+    "document_types": ["OBJEKTAKTE"],
     "street_fields": ["STREET", "GE_STREET", "STRASSE"],
     "house_fields": ["HAUSNR", "HOUSENO", "HSNR", "HAUSNUMMER"],
     "partner_fields": ["PARTNERID", "PARTNER", "MIETERID"],
     "mandant_fields": ["MANDANT", "MANDANTID", "FIRMA"],
     "objekt_fields": ["OBJEKTID", "OBJEKT", "WE", "WENR"],
-    "max_types": 2,
-    "max_per_type": 10
+    "max_types": 1,
+    "max_per_type": 5
   },
   "entries": []
 }

@@ -16,8 +16,9 @@ import {
 import { looksLikeStreet, streetKey } from "./normalize.js";
 import { mapStatus, mapTopic } from "./topic.js";
 import { MAX_PARTNERS, resolvePlace, type ResolvePlaceInput } from "./resolve-place.js";
+import { SPEED, budgetExpired, clampResults } from "./speed.js";
 
-export const MAX_SEARCH_CALLS = 6;
+export const MAX_SEARCH_CALLS = SPEED.MAX_SEARCH_CALLS;
 
 export interface TicketSearchJob {
   partnerId?: string;
@@ -76,15 +77,21 @@ export function buildTicketSearchJobs(opts: {
 
   const jobs: TicketSearchJob[] = [];
   const partners = opts.partnerIds.slice(0, MAX_PARTNERS);
+  const keywordsCapped = keywords.slice(0, SPEED.MAX_KEYWORDS_PER_SEARCH);
+  if (keywords.length > keywordsCapped.length) {
+    warnings.push(
+      `Speed: nur das erste Keyword (${keywordsCapped[0]}) wird gesucht, nicht ${keywords.length}.`
+    );
+  }
   const push = (job: TicketSearchJob) => {
     if (jobs.length >= MAX_SEARCH_CALLS) return;
     jobs.push(job);
   };
 
   if (partners.length) {
-    if (keywords.length) {
+    if (keywordsCapped.length) {
       for (const partnerId of partners) {
-        for (const keyword of keywords) {
+        for (const keyword of keywordsCapped) {
           push({ partnerId, keyword, state: opts.state });
         }
       }
@@ -97,8 +104,8 @@ export function buildTicketSearchJobs(opts: {
         push({ partnerId, state: opts.state });
       }
     }
-  } else if (keywords.length) {
-    for (const keyword of keywords) {
+  } else if (keywordsCapped.length) {
+    for (const keyword of keywordsCapped) {
       push({ keyword, state: opts.state });
     }
   } else if (opts.subjectHints.length) {
@@ -133,6 +140,7 @@ function sortTickets(a: TicketSummary, b: TicketSummary): number {
 export async function findTickets(
   input: FindTicketsInput
 ): Promise<HelperEnvelope> {
+  const startedAt = Date.now();
   const tracker = new CallTracker();
   const warnings: string[] = [];
   const ambiguities: Ambiguity[] = [];
@@ -196,6 +204,7 @@ export async function findTickets(
         houseNumbers: input.houseNumbers,
         weNr: input.weNr,
         partnerIds: input.partnerIds,
+        allowDocumentFallback: input.allowDocumentFallback === true,
       });
       warnings.push(...(resolveEnv.warnings ?? []));
       ambiguities.push(...(resolveEnv.ambiguities ?? []));
@@ -237,9 +246,32 @@ export async function findTickets(
       );
     }
 
-    const limit = Math.min(Math.max(input.limit ?? 10, 1), 50);
+    const limit = clampResults(input.limit);
     const collected: TicketSummary[] = [];
     const seen = new Set<string>();
+
+    if (budgetExpired(startedAt)) {
+      warnings.push(
+        `Zeitbudget ${SPEED.HELPER_BUDGET_MS}ms nach Resolve erschöpft — Ticket-Suche übersprungen (Teilresultat).`
+      );
+      return okEnvelope(
+        { tickets: [], jobs },
+        {
+          resolution: {
+            topic,
+            status,
+            partnerIds,
+            jobs,
+            streetAsKeyword: false,
+            speed: { timedOut: true, maxResults: limit },
+            address: resolveEnv?.resolution ?? null,
+          },
+          ambiguities,
+          warnings: mergeWarnings(warnings),
+          raw_calls: tracker.calls,
+        }
+      );
+    }
 
     const results = await Promise.all(
       jobs.map((job) =>
@@ -262,6 +294,7 @@ export async function findTickets(
               start: input.start ?? 1,
               max: limit,
               filters,
+              timeoutMs: SPEED.CALL_TIMEOUT_MS,
             });
           },
           [job.partnerId, job.keyword, job.subjectLike, job.state]
@@ -312,6 +345,13 @@ export async function findTickets(
           streetAsKeyword: false,
           streetKey: input.street ? streetKey(input.street) : null,
           address: resolveEnv?.resolution ?? null,
+          speed: {
+            maxResults: limit,
+            maxPartners: MAX_PARTNERS,
+            maxSearchCalls: MAX_SEARCH_CALLS,
+            elapsedMs: Date.now() - startedAt,
+            documentFallback: input.allowDocumentFallback === true,
+          },
         },
         ambiguities,
         warnings: mergeWarnings(warnings),

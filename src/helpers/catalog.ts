@@ -12,6 +12,7 @@ import {
 } from "./envelope.js";
 import { listTopicCatalog } from "./topic.js";
 import { collapseWs, foldGerman } from "./normalize.js";
+import { SPEED } from "./speed.js";
 
 export type CatalogKind =
   | "keywords"
@@ -20,10 +21,9 @@ export type CatalogKind =
   | "doc_types"
   | "departments";
 
-const TTL_MS = 24 * 60 * 60 * 1000;
-
 interface CacheEntry {
   fetchedAt: number;
+  ttlMs: number;
   items: CatalogItem[];
   source: string;
   warning?: string;
@@ -119,8 +119,25 @@ function parseXmlNamed(text: string, kind: CatalogKind): CatalogItem[] {
   return uniqueItems(items);
 }
 
+function stamped(
+  items: CatalogItem[],
+  source: string,
+  ok: boolean,
+  warning?: string
+): CacheEntry {
+  return {
+    fetchedAt: Date.now(),
+    ttlMs: ok && items.length ? SPEED.CATALOG_TTL_MS : SPEED.CATALOG_NEGATIVE_TTL_MS,
+    items,
+    source,
+    warning,
+  };
+}
+
 async function loadKeywords(tracker: CallTracker): Promise<CacheEntry> {
-  const res = await tracker.track("getKeywords", () => soap.getKeywords("", ""));
+  const res = await tracker.track("getKeywords", () =>
+    soap.getKeywords("", "", { timeoutMs: SPEED.CATALOG_TIMEOUT_MS })
+  );
   const rows = walkRows(res.json);
   const items: CatalogItem[] = [];
   for (const row of rows) {
@@ -136,19 +153,20 @@ async function loadKeywords(tracker: CallTracker): Promise<CacheEntry> {
   if (!items.length && typeof res.returnText === "string") {
     items.push(...parseXmlNamed(res.returnText, "keywords"));
   }
-  return {
-    fetchedAt: Date.now(),
-    items: uniqueItems(items),
-    source: "soap.getKeywords",
-    warning: res.ok
+  const uniq = uniqueItems(items);
+  return stamped(
+    uniq,
+    "soap.getKeywords",
+    res.ok,
+    res.ok
       ? undefined
-      : res.errorText ?? "getKeywords fehlgeschlagen — Synonym-Datei bleibt Fallback.",
-  };
+      : res.errorText ?? "getKeywords Timeout/Fehler — Synonym-Datei bleibt Fallback. Cache kurz, kein Retry-Sturm."
+  );
 }
 
 async function loadDocTypes(tracker: CallTracker): Promise<CacheEntry> {
   const res = await tracker.track("listDocumentTypes", () =>
-    documents.listDocumentTypes()
+    documents.listDocumentTypes({ timeoutMs: SPEED.CATALOG_TIMEOUT_MS })
   );
   let items: CatalogItem[] = [];
   const text = res.text ?? "";
@@ -168,18 +186,19 @@ async function loadDocTypes(tracker: CallTracker): Promise<CacheEntry> {
   } catch {
     items = parseXmlNamed(text, "doc_types");
   }
-  return {
-    fetchedAt: Date.now(),
-    items: uniqueItems(items),
-    source: "documents.listDocumentTypes",
-    warning: res.ok
-      ? undefined
-      : res.error ?? "listDocumentTypes fehlgeschlagen.",
-  };
+  const uniq = uniqueItems(items);
+  return stamped(
+    uniq,
+    "documents.listDocumentTypes",
+    res.ok,
+    res.ok ? undefined : res.error ?? "listDocumentTypes Timeout/Fehler — kein Retry-Sturm."
+  );
 }
 
 async function loadDepartments(tracker: CallTracker): Promise<CacheEntry> {
-  const res = await tracker.track("listDepartments", () => documents.listDepartments());
+  const res = await tracker.track("listDepartments", () =>
+    documents.listDepartments({ timeoutMs: SPEED.CATALOG_TIMEOUT_MS })
+  );
   let items: CatalogItem[] = [];
   const text = res.text ?? "";
   try {
@@ -191,14 +210,12 @@ async function loadDepartments(tracker: CallTracker): Promise<CacheEntry> {
   } catch {
     items = parseXmlNamed(text, "departments");
   }
-  return {
-    fetchedAt: Date.now(),
-    items: uniqueItems(items),
-    source: "documents.listDepartments",
-    warning: res.ok
-      ? undefined
-      : res.error ?? "listDepartments fehlgeschlagen.",
-  };
+  return stamped(
+    uniqueItems(items),
+    "documents.listDepartments",
+    res.ok,
+    res.ok ? undefined : res.error ?? "listDepartments Timeout/Fehler — kein Retry-Sturm."
+  );
 }
 
 function loadStatuses(): CacheEntry {
@@ -227,11 +244,11 @@ function loadStatuses(): CacheEntry {
       extra: { alias, source: "STATE_CODES" },
     });
   }
-  return {
-    fetchedAt: Date.now(),
-    items: uniqueItems(items),
-    source: "topic-synonyms + STATE_CODES (keine Status-Listen-API)",
-  };
+  return stamped(
+    uniqueItems(items),
+    "topic-synonyms + STATE_CODES (keine Status-Listen-API)",
+    true
+  );
 }
 
 function loadGroupsFromKeywords(keywords: CatalogItem[]): CacheEntry {
@@ -240,11 +257,7 @@ function loadGroupsFromKeywords(keywords: CatalogItem[]): CacheEntry {
     const g = k.extra?.group ?? k.extra?.category;
     if (g) items.push({ name: g, kind: "groups" });
   }
-  return {
-    fetchedAt: Date.now(),
-    items: uniqueItems(items),
-    source: "derived from getKeywords",
-  };
+  return stamped(uniqueItems(items), "derived from getKeywords", true);
 }
 
 async function ensure(
@@ -252,7 +265,7 @@ async function ensure(
   tracker: CallTracker
 ): Promise<CacheEntry> {
   const hit = cache.get(kind);
-  if (hit && ageMs(hit)! < TTL_MS) return hit;
+  if (hit && ageMs(hit)! < hit.ttlMs) return hit;
 
   if (kind === "statuses") {
     const entry = loadStatuses();
@@ -305,7 +318,14 @@ export async function getCatalog(
         source: entry.source,
       },
       {
-        resolution: { kind, cached: true, source: entry.source },
+        resolution: {
+          kind,
+          cached: (ageMs(entry) ?? 0) > 5,
+          source: entry.source,
+          cacheAgeMs: ageMs(entry),
+          ttlMs: entry.ttlMs,
+          speed: "in-memory TTL; list_* nicht bei jedem Call",
+        },
         warnings,
         raw_calls: tracker.calls,
       }
@@ -321,4 +341,8 @@ export async function getCatalog(
 
 export function peekCachedKeywords(): string[] {
   return (cache.get("keywords")?.items ?? []).map((i) => i.name);
+}
+
+export function peekCachedNames(kind: CatalogKind): string[] {
+  return (cache.get(kind)?.items ?? []).map((i) => i.name);
 }
