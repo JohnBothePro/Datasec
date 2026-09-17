@@ -15,6 +15,10 @@ import {
   getAuth,
 } from "./auth.js";
 import { registerExtendedTools, EXTENDED_TOOL_NAMES } from "./tools-extended.js";
+import {
+  HELPER_TOOL_NAMES,
+  registerHelperTools,
+} from "./helpers/register-helpers.js";
 
 function textResult(data: unknown, isError = false) {
   const text =
@@ -588,6 +592,7 @@ export function registerTools(server: McpServer): void {
   );
 
   registerExtendedTools(server);
+  registerHelperTools(server);
 }
 
 export function createDatasecServer(): McpServer {
@@ -614,4 +619,8 @@ export const CORE_TOOL_NAMES = [
 ] as const;
 
 /** All tool names for docs / smoke checks. */
-export const TOOL_NAMES = [...CORE_TOOL_NAMES, ...EXTENDED_TOOL_NAMES];
+export const TOOL_NAMES = [
+  ...CORE_TOOL_NAMES,
+  ...EXTENDED_TOOL_NAMES,
+  ...HELPER_TOOL_NAMES,
+];

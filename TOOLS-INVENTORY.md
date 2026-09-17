@@ -75,3 +75,20 @@ Existing core tools kept and not broken.
 Among newly added: 42 real + 1 stub (`datasec_sso_status`). Pre-existing stub `datasec_send_ticket_mail` kept.
 
 Write tools use `gateWrite` / `confirm`. Deep-link `includeAuthToken=true` requires **admin + confirm**; responses prefer redacted URL unless admin explicitly requested token.
+
+## L1 Helpers (`datasec_h_*`) — additive, raw tools unchanged
+
+Feature flag `DATASEC_HELPERS_ENABLED` (default true). Details: `docs/HELPERS.md`.
+
+| Tool | Status | Notes |
+|------|--------|--------|
+| datasec_h_ask | done | Freitext-Router (Heuristik, kein LLM) |
+| datasec_h_resolve | done | Crosswalk + optionaler Document-Index; nicht getPartnerId |
+| datasec_h_find_tickets | done | PARTNERID + KEYWORD/SUBJECT; Straße nie KEYWORD |
+| datasec_h_ticket_briefing | done | Ticket + Includes; Anlagen = TICKETANLAGEN+TICKETID |
+| datasec_h_catalog | done | Cached keywords/statuses/doc_types/departments |
+| datasec_h_partner_context | done | Stammdaten + optionale Tickets/Schäden |
+| datasec_h_find_documents | done | TICKETARCHIV gesperrt |
+| datasec_h_create_ticket | done | Preview ohne confirm; Gate bei confirm |
+| datasec_h_add_note | done | Preview ohne confirm; Gate bei confirm |
+| datasec_h_set_state | done | Preview ohne confirm; Gate bei confirm |

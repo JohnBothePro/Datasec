@@ -13,6 +13,7 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { isInitializeRequest } from "@modelcontextprotocol/sdk/types.js";
 import { createDatasecServer } from "./tools.js";
 import { session } from "./client.js";
+import { helpersEnabled } from "./helpers/envelope.js";
 import {
   allowAnon,
   authConfigured,
@@ -200,6 +201,7 @@ async function main(): Promise<void> {
       env: session.env,
       tokenLoaded: session.tokenLoaded,
       writesEnabled: session.writesEnabled,
+      helpersEnabled: helpersEnabled(),
       authRequired: authConfigured() || !allowAnon(),
       keysFile: getKeysFilePath(),
       keyCount: loadKeys().length,
@@ -353,7 +355,7 @@ async function main(): Promise<void> {
     console.error(
       `[datasec-mcp] HTTP listening http://${HOST}:${PORT}/mcp ` +
         `(SSE /sse) env=${session.env} tokenLoaded=${session.tokenLoaded} ` +
-        `writes=${session.writesEnabled} auth=${mode}`
+        `writes=${session.writesEnabled} helpers=${helpersEnabled()} auth=${mode}`
     );
   });
 }
