@@ -41,6 +41,10 @@ function failDoc(error: string): DocRestResult {
   };
 }
 
+function structureDoc(fieldNames: string[]) {
+  return okDoc(JSON.stringify({ fields: fieldNames.map((name) => ({ name })) }));
+}
+
 function liveDeps(
   search: AddressSearchDeps["searchByDocumentType"],
   extra?: Partial<AddressSearchDeps>
@@ -48,6 +52,17 @@ function liveDeps(
   return {
     persistCache: false,
     searchByDocumentType: search,
+    getDocumentTypeStructure:
+      extra?.getDocumentTypeStructure ??
+      (async () =>
+        structureDoc([
+          "STREET",
+          "HAUSNR",
+          "PARTNERID",
+          "MANDANT",
+          "OBJEKTID",
+          "SWENR",
+        ])),
     ...extra,
   };
 }
@@ -177,6 +192,86 @@ describe("live address resolve from Datasec", () => {
     assert.deepEqual(r.data?.partnerIds, ["SEED-9"]);
     assert.equal(r.resolution.source, "seed");
     assert.equal(calls, 0);
+  });
+
+  it("does not send STREET when structure has no street-like fields", async () => {
+    const filtersSent: Array<Array<{ field: string; val: string }>> = [];
+    let searchCalls = 0;
+    const r = await resolvePlace({
+      mandant: "27",
+      street: "Hauptstraße",
+      houseNumbers: "118",
+      deps: liveDeps(
+        async (opts) => {
+          searchCalls += 1;
+          filtersSent.push(
+            (opts.filters ?? []).map((f) => ({ field: f.field, val: f.val }))
+          );
+          return okDoc(xmlItems([]));
+        },
+        {
+          getDocumentTypeStructure: async () =>
+            structureDoc([
+              "SWENR",
+              "SMENR",
+              "SGENR",
+              "BUKRS",
+              "BETREFF",
+              "RECNNR",
+              "TICKETID",
+            ]),
+        }
+      ),
+    });
+    assert.equal(r.ok, true);
+    assert.equal(searchCalls, 0, "must not search with fabricated street filters");
+    assert.ok(
+      filtersSent.every((fs) => !fs.some((f) => /^(STREET|STRASSE|HAUSNR)$/i.test(f.field))),
+      JSON.stringify(filtersSent)
+    );
+    assert.deepEqual(r.data?.partnerIds ?? [], []);
+    assert.ok(
+      (r.warnings ?? []).some((w) =>
+        /keine Straßenfelder|Adresse kann so nicht aufgelöst|PARTNERID|SWENR/i.test(w)
+      ),
+      JSON.stringify(r.warnings)
+    );
+    assert.equal(r.resolution.streetAsKeyword, false);
+    assert.equal(r.resolution.getPartnerId, "not_used");
+  });
+
+  it("resolves via SWENR when street fields are absent but SWENR is known", async () => {
+    const filtersSent: Array<Array<{ field: string; val: string }>> = [];
+    const r = await resolvePlace({
+      street: "Hauptstraße",
+      weNr: "00001234",
+      deps: liveDeps(
+        async (opts) => {
+          filtersSent.push(
+            (opts.filters ?? []).map((f) => ({ field: f.field, val: f.val }))
+          );
+          return okDoc(
+            xmlItems([{ SWENR: "00001234", RECNNR: "R-1", PARTNERID: "P-WE" }])
+          );
+        },
+        {
+          getDocumentTypeStructure: async () =>
+            structureDoc(["SWENR", "SMENR", "RECNNR"]),
+        }
+      ),
+    });
+    assert.equal(r.ok, true);
+    assert.ok(
+      filtersSent.some((fs) =>
+        fs.some((f) => f.field === "SWENR" && f.val === "00001234")
+      ),
+      JSON.stringify(filtersSent)
+    );
+    assert.ok(
+      filtersSent.every((fs) => !fs.some((f) => /^STREET|STRASSE$/i.test(f.field))),
+      JSON.stringify(filtersSent)
+    );
+    assert.deepEqual(r.data?.partnerIds, ["P-WE"]);
   });
 
   it("liveResolve:false stays local and does not invent partners", async () => {

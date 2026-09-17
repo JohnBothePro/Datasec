@@ -174,7 +174,9 @@ export async function findDocuments(
       } else if (partnerId) {
         filters.push({ field: "PARTNERID", op: "=", val: partnerId });
       } else if (input.street && /OBJEKT|MIETER/i.test(documentType)) {
-        filters.push({ field: "STREET", op: "like", val: `*${input.street}*` });
+        warnings.push(
+          "Dokumentensuche ohne PARTNERID: Datasec-Index hat keine Straßenfelder — STREET-Filter wird nicht gesendet. Bitte PARTNERID / Ticketnr / SWENR."
+        );
       }
       for (let i = 0; i < filters.length - 1; i++) {
         if (!filters[i].con) filters[i].con = "AND";

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   extractMandant,
+  extractSwenr,
   extractTicketnr,
   houseKey,
   looksLikeStreet,
@@ -78,6 +79,12 @@ describe("street + address parse", () => {
   it("extracts mandant and ticketnr", () => {
     assert.equal(extractMandant("im Mandanten 27 bitte"), "27");
     assert.equal(extractTicketnr("siehe 32-260907-Q0009 danke"), "32-260907-Q0009");
+  });
+
+  it("extracts SWENR / WE-Nr without treating street as WE", () => {
+    assert.equal(extractSwenr("Tickets SWENR 00001234"), "00001234");
+    assert.equal(extractSwenr("WE-Nr: 99"), "99");
+    assert.equal(extractSwenr("Hauptstraße 118"), undefined);
   });
 
   it("looksLikeStreet is true for streets, false for topics", () => {

@@ -21,7 +21,7 @@ Vollständige Tool-Inventar-Datei: **`TOOLS-INVENTORY.md`**.
 | Deep Links Kap. 3 | `datasec_build_deeplink_base/akte/search/document_type/sammelbenutzer` (Token-Embedding default aus, admin+confirm) |
 | SSO Kap. 4 | `datasec_sso_status` (nicht unterstützt V1.7) |
 | Bridge Kap. 1 | `datasec_bridge_info` |
-| **L1 Helpers** | Seconds-latency: `datasec_h_ask` (ein Call, dann antworten). Auto-Adresse aus Datasec (OBJEKTAKTE/MIETERAKTE + Cache). Tickets, Akten, Stammdaten, Katalog, News. Siehe **`docs/HELPERS.md`**. |
+| **L1 Helpers** | Seconds-latency: `datasec_h_ask` (ein Call, dann antworten). Auto-Adresse aus Datasec nach Feld-Discovery (OBJEKTAKTE/MIETERAKTE + Cache; kein STREET-404). Tickets, Akten, Stammdaten, Katalog, News. Siehe **`docs/HELPERS.md`**. |
 
 Schreiben ist **vollständig implementiert** (nicht „Phase 2“), aber abgesichert:
 

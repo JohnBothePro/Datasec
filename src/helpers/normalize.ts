@@ -256,6 +256,14 @@ export function extractPartnerId(text: string): string | undefined {
   return m[1];
 }
 
+/** SAP RE-FX Wirtschaftseinheit (SWENR), never a street. */
+export function extractSwenr(text: string): string | undefined {
+  const m = text.match(
+    /\b(?:swenr|we-?nr|wirtschaftseinheit)\s*[:=]?\s*([A-Za-z0-9._-]{1,20})\b/i
+  );
+  return m?.[1];
+}
+
 export function looksLikeStreet(value: string): boolean {
   const k = streetKey(value);
   return /strasse|\bstr\b|\bweg\b|\bplatz\b|\ballee\b|\bring\b|\bgasse\b/.test(k);

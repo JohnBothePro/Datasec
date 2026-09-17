@@ -126,6 +126,42 @@ export function mapTopic(input: string | undefined | null): TopicMapping {
   };
 }
 
+/**
+ * Exact KEYWORD values only. Synonym labels (e.g. "Mängel") are not sent
+ * unless the live catalog confirms that exact keyword exists.
+ */
+export function resolveSearchKeywords(
+  topic: TopicMapping,
+  liveKeywords: string[] = []
+): { keywords: string[]; warnings: string[] } {
+  const warnings: string[] = [];
+  const liveSet = new Set(liveKeywords.map((k) => foldGerman(k).toLowerCase()));
+  const hasLive = liveSet.size > 0;
+  const labelKey = topic.label ? foldGerman(topic.label).toLowerCase() : "";
+
+  const keywords: string[] = [];
+  for (const k of topic.keywords) {
+    const nk = foldGerman(k).toLowerCase();
+    if (!nk) continue;
+    const isLabel = Boolean(labelKey) && nk === labelKey;
+    if (isLabel) {
+      if (hasLive && liveSet.has(nk)) keywords.push(k);
+      continue;
+    }
+    if (hasLive && !liveSet.has(nk)) continue;
+    keywords.push(k);
+  }
+
+  if (topic.matched && topic.keywords.length && !keywords.length && topic.subjectHints.length) {
+    warnings.push(
+      topic.label
+        ? `Thema '${topic.label}' ist nur ein Synonym-Label, kein nachweisbares KEYWORD — Suche über SUBJECT, nicht KEYWORD='${topic.label}'.`
+        : "Keine Katalog-Keywords — Suche über SUBJECT-Hints."
+    );
+  }
+  return { keywords, warnings };
+}
+
 export interface StatusMapping {
   input: string;
   matched: boolean;

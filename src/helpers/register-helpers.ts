@@ -62,7 +62,7 @@ export function registerHelperTools(server: McpServer): boolean {
       description:
         "HAUPT-EINSTIEG für deutschen Freitext über Tickets, Akten, Stammdaten, Katalog, News. " +
         "Designed for seconds-latency: EIN Helper-Call, dann antworten — keine Tool-Stürme. " +
-        "Auto-Adresse: Datasec Document-Index (OBJEKTAKTE/MIETERAKTE) + Memory/Disk-Cache; Seed nur Override. " +
+        "Auto-Adresse: Document-Index nach Feld-Discovery (keine STREET-404) + Memory/Disk-Cache; Seed nur Override. " +
         "HARD-NO: Straße wird NIE als Ticket-KEYWORD gesucht. getPartnerId ist keine Adresssuche. " +
         "Writes nur Vorschau bis confirm:true.",
       inputSchema: {
@@ -95,7 +95,9 @@ export function registerHelperTools(server: McpServer): boolean {
     {
       description:
         "Mandant + Adresse → Partner (seconds-latency). " +
-        "Default: Live-Auflösung über Datasec Document-Index (OBJEKTAKTE, dann MIETERAKTE), " +
+        "Default: Live-Auflösung über Datasec Document-Index (OBJEKTAKTE, dann MIETERAKTE) " +
+        "nach getDocumentTypeStructure — nur existierende Felder, nie STREET-404. " +
+        "Ohne Straßenfelder: Warnung (PARTNERID / Ticketnr / SWENR). Optional SWENR-Filter. " +
         "Treffer in Memory (15min) und data/address-crosswalk.json (24h Cache, kein Ops-Seed). " +
         "Optionaler Seed nur Override/Bootstrap. Mehrere Treffer → ambiguities[], kein stilles Picken. " +
         "API-Fehler = Warnung + Teilresultat. getPartnerId ist keine Adresssuche. Straße nie KEYWORD.",
@@ -104,7 +106,7 @@ export function registerHelperTools(server: McpServer): boolean {
         mandant: z.string().optional(),
         street: z.string().optional(),
         houseNumbers: houseNumbersSchema,
-        weNr: z.string().optional(),
+        weNr: z.string().optional().describe("SWENR / Wirtschaftseinheit, wenn bekannt"),
         partnerIds: z.array(z.string()).optional(),
         liveResolve: z
           .boolean()
@@ -134,13 +136,14 @@ export function registerHelperTools(server: McpServer): boolean {
     {
       description:
         "Tickets zu Adresse/Mandant/Thema (seconds-latency: max 10 Treffer, max 4 Partner, max 4 parallele Suchen, 8s Timeout). " +
-        "Adresse live aus Datasec, dann PARTNERID + KEYWORD/SUBJECT. Straße niemals KEYWORD.",
+        "Adresse live aus Datasec (nur existierende Indexfelder), dann PARTNERID + KEYWORD/SUBJECT. " +
+        "Thema Mängel: kein KEYWORD=Mängel (Synonym-Label); SUBJECT-Hints. Straße niemals KEYWORD.",
       inputSchema: {
         query: z.string().optional(),
         mandant: z.string().optional(),
         street: z.string().optional(),
         houseNumbers: houseNumbersSchema,
-        weNr: z.string().optional(),
+        weNr: z.string().optional().describe("SWENR / Wirtschaftseinheit, wenn bekannt"),
         partnerIds: z.array(z.string()).optional(),
         topic: z.string().optional().describe("z.B. Mängel — wird über Synonyme gemappt"),
         keyword: z.string().optional().describe("Nur echtes Schlagwort, keine Straße"),

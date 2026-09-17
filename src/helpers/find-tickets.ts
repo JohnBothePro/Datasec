@@ -14,7 +14,8 @@ import {
   type HelperEnvelope,
 } from "./envelope.js";
 import { looksLikeStreet, streetKey } from "./normalize.js";
-import { mapStatus, mapTopic } from "./topic.js";
+import { mapStatus, mapTopic, resolveSearchKeywords } from "./topic.js";
+import { peekCachedKeywords } from "./catalog.js";
 import { MAX_PARTNERS, resolvePlace, type ResolvePlaceInput } from "./resolve-place.js";
 import { SPEED, budgetExpired, clampResults } from "./speed.js";
 
@@ -216,9 +217,32 @@ export async function findTickets(
       if (resolveEnv.raw_calls) tracker.calls.push(...resolveEnv.raw_calls);
     }
 
+    const explicitKeyword =
+      input.keyword && input.keyword !== topic.label ? [input.keyword] : [];
+    const mappedKw = resolveSearchKeywords(
+      topic.matched
+        ? { ...topic, keywords: [...topic.keywords, ...explicitKeyword] }
+        : { ...topic, keywords: input.keyword ? [input.keyword] : [] },
+      peekCachedKeywords()
+    );
+    warnings.push(...mappedKw.warnings);
+
+    const addressAttempted = Boolean(
+      input.mandant ||
+        input.street ||
+        input.houseNumbers ||
+        input.weNr ||
+        (resolveEnv?.resolution as { street?: string | null } | undefined)?.street
+    );
+    if (addressAttempted && !partnerIds.length) {
+      warnings.push(
+        "Adresse konnte nicht auf PARTNERID aufgelöst werden. Bitte PARTNERID, Ticketnr oder SWENR angeben."
+      );
+    }
+
     const { jobs, warnings: jobWarnings } = buildTicketSearchJobs({
       partnerIds,
-      keywords: topic.matched ? topic.keywords : input.keyword ? [input.keyword] : [],
+      keywords: mappedKw.keywords,
       subjectHints: topic.subjectHints,
       state: stateForSearch,
       ticketnr: input.ticketnr,

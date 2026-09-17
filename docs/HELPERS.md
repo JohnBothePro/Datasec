@@ -28,9 +28,10 @@ Freitext → genau EIN Helper-Call (datasec_h_ask), dann antworten.
 Kein exploratives Nachziehen von catalog / notes / documents / raw tools „nur zur Sicherheit“.
 Multi-Hop nur wenn der User Extra-Daten ausdrücklich verlangt (Notizen, Historie, Anlagen).
 
-AUTO-ADRESSE: Straße/Hausnr werden über Datasec Document-Index aufgelöst
-(OBJEKTAKTE, bei 0 Treffern MIETERAKTE). Seed/Cache sind Override, nicht der einzige Pfad.
-Kein Adress-Export von Ops nötig.
+AUTO-ADRESSE: Live-Pfad ruft getDocumentTypeStructure auf und filtert nur
+existierende Indexfelder. STREET/STRASSE/HAUSNR sind Kandidaten, keine Annahme.
+Fehlen Straßenfelder: klare Warnung, keine 404-Filter. Optional SWENR.
+Seed/Cache bleiben Override.
 
 HARD-NO: Niemals eine Straße oder Hausnummer als KEYWORD in datasec_search_tickets.
 Adresse → PARTNERID, dann PARTNERID + KEYWORD/SUBJECT.
@@ -86,9 +87,11 @@ Leerer Crosswalk als einziger Pfad ist **nicht** akzeptabel. Resolve zieht Daten
 1. **Memory-Cache** (15 min, Key = Mandant + Straße + Hausnr).
 2. **Optionaler Seed** (`seed_entries[]` in `data/address-crosswalk.json`) — Override/Bootstrap, kein TTL.
 3. **Disk-Cache** (`entries[]` mit `source=live_cache` + `cachedAt`) — 24h TTL.
-4. **Live:** `search_by_document_type` auf **OBJEKTAKTE**, bei 0 Treffern **MIETERAKTE**.
-   Filter: erstes Straßenfeld `STREET` LIKE `*Straße*` (+ Mandant wenn vorhanden).
-   Hausnr-Abgleich clientseitig. Felder: `STREET`/`GE_STREET`/`STRASSE`, `HAUSNR`, `PARTNERID`, `MANDANT`, `OBJEKTID`.
+4. **Live:** zuerst `getDocumentTypeStructure` (Cache), dann `search_by_document_type` auf **OBJEKTAKTE**, bei 0 Treffern **MIETERAKTE**.
+   Nur Felder, die in der Struktur vorkommen. Unbekannte Felder (z. B. `STREET` auf SAP-Index) werden **nicht** gesendet — das wäre HTTP 404.
+   Gibt es keine Straßenfelder: keine Adresssuche über den Index; Warnung (PARTNERID / Ticketnr / SWENR).
+   Ist `SWENR` bekannt und im Index vorhanden: Filter `SWENR`.
+   Hausnr-Abgleich nur clientseitig, wenn ein Hausnr-Feld existiert.
 5. Treffer werden in Memory + Disk geschrieben (best-effort). `DATASEC_ADDRESS_CACHE_PATH` überschreibt den Dateipfad.
 6. Mehrere Partner → `ambiguities[]`, kein stilles Picken.
 7. API-Fehler/Timeout → klare Warning + leeres Teilresultat, kein Hänger.
