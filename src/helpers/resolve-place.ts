@@ -19,6 +19,7 @@ import {
   type HelperEnvelope,
 } from "./envelope.js";
 import {
+  extractSwenr,
   houseKey,
   parseAddressFromText,
   parseHouseNumbers,
@@ -64,11 +65,13 @@ export interface CrosswalkEntry {
 export interface DocumentLiveCfg {
   enabled: boolean;
   document_types: string[];
+  /** Candidate names only — live path intersects with getDocumentTypeStructure. */
   street_fields: string[];
   house_fields: string[];
   partner_fields: string[];
   mandant_fields: string[];
   objekt_fields: string[];
+  swenr_fields: string[];
   max_types: number;
   max_per_type: number;
 }
@@ -104,12 +107,30 @@ const DEFAULT_LIVE: DocumentLiveCfg = {
   partner_fields: ["PARTNERID", "PARTNER", "MIETERID"],
   mandant_fields: ["MANDANT", "MANDANTID", "FIRMA"],
   objekt_fields: ["OBJEKTID", "OBJEKT", "WE", "WENR"],
+  swenr_fields: ["SWENR", "WENR", "WE_NR"],
   max_types: SPEED.LIVE_RESOLVE_MAX_TYPES,
   max_per_type: SPEED.LIVE_RESOLVE_MAX_PER_TYPE,
 };
 
+const NO_STREET_FIELDS_WARNING =
+  "Datasec-Index hat keine Straßenfelder; Adresse kann so nicht aufgelöst werden; bitte PARTNERID / Ticketnr / SWENR.";
+
+const STRUCTURE_SKIP = new Set([
+  "ITEM",
+  "FIELD",
+  "FIELDS",
+  "NAME",
+  "TRUE",
+  "FALSE",
+  "INDEX",
+  "DOCUMENT",
+  "TYPE",
+  "DOCUMENTTYPE",
+]);
+
 let cachedFile: CrosswalkFile | null = null;
 const memoryCache = new Map<string, { hits: AddressHit[]; at: number }>();
+const structureCache = new Map<string, { fields: Set<string>; at: number }>();
 
 function nowMs(deps?: AddressSearchDeps): number {
   return deps?.now ? deps.now() : Date.now();
@@ -169,6 +190,66 @@ function diskCacheEntriesOf(file: CrosswalkFile, now: number): CrosswalkEntry[] 
 export function resetAddressCachesForTests(): void {
   cachedFile = null;
   memoryCache.clear();
+  structureCache.clear();
+}
+
+/** Index field names from getDocumentTypeStructure XML/JSON. */
+export function parseStructureFieldNames(text: string): string[] {
+  const names = new Set<string>();
+  const add = (v: string | undefined) => {
+    const t = String(v ?? "").trim();
+    if (!t || t.length > 64) return;
+    if (!/^[A-Za-z][A-Za-z0-9_.:-]*$/.test(t)) return;
+    const up = t.toUpperCase();
+    if (STRUCTURE_SKIP.has(up)) return;
+    names.add(up);
+  };
+
+  if (!text?.trim()) return [];
+
+  try {
+    const json = JSON.parse(text) as unknown;
+    const walk = (node: unknown, hint = ""): void => {
+      if (node == null) return;
+      if (typeof node === "string") {
+        if (/field|index|spalte|name/i.test(hint)) add(node);
+        return;
+      }
+      if (Array.isArray(node)) {
+        for (const x of node) walk(x, hint);
+        return;
+      }
+      if (typeof node === "object") {
+        const o = node as Record<string, unknown>;
+        const direct =
+          o.name ?? o.NAME ?? o.field ?? o.FIELD ?? o.id ?? o.ID ?? o.indexField ?? o.INDEXFIELD;
+        if (typeof direct === "string") add(direct);
+        for (const [k, v] of Object.entries(o)) {
+          if (/field|index|name|spalte/i.test(k)) walk(v, k);
+        }
+      }
+    };
+    walk(json);
+  } catch {
+    /* XML / non-JSON */
+  }
+
+  const attrRe = /(?:name|field|indexfield|id)="([^"]+)"/gi;
+  let m: RegExpExecArray | null;
+  while ((m = attrRe.exec(text)) !== null) add(m[1]);
+
+  const tagRe = /<(?:field|indexfield|name|column)\b[^>]*>([^<]+)<\//gi;
+  while ((m = tagRe.exec(text)) !== null) add(m[1]);
+
+  return [...names];
+}
+
+function firstKnown(candidates: string[], available: Set<string>): string | undefined {
+  return candidates.find((c) => available.has(c.toUpperCase()));
+}
+
+function knownList(candidates: string[], available: Set<string>): string[] {
+  return candidates.filter((c) => available.has(c.toUpperCase()));
 }
 
 export interface ResolvePlaceInput {
@@ -320,9 +401,14 @@ function pickField(row: Record<string, string>, fields: string[]): string | unde
   return fields.map((f) => row[f.toUpperCase()]).find(Boolean);
 }
 
-function memoryKey(norm: { mandant?: string; street?: string; houseNumbers: string[] }): string {
+function memoryKey(norm: {
+  mandant?: string;
+  street?: string;
+  houseNumbers: string[];
+  weNr?: string;
+}): string {
   const houses = [...norm.houseNumbers].map(houseKey).sort().join(",");
-  return `${norm.mandant ?? ""}|${norm.street ? streetKey(norm.street) : ""}|${houses}`;
+  return `${norm.mandant ?? ""}|${norm.street ? streetKey(norm.street) : ""}|${houses}|${norm.weNr ?? ""}`;
 }
 
 function persistLiveHits(hits: AddressHit[], deps?: AddressSearchDeps): void {
@@ -363,8 +449,44 @@ function persistLiveHits(hits: AddressHit[], deps?: AddressSearchDeps): void {
   }
 }
 
+async function structureFieldsForType(
+  documentType: string,
+  tracker: CallTracker,
+  deps?: AddressSearchDeps
+): Promise<{ fields: Set<string>; warning?: string }> {
+  const now = nowMs(deps);
+  const hit = structureCache.get(documentType);
+  if (hit && now - hit.at < SPEED.CATALOG_TTL_MS) {
+    return { fields: hit.fields };
+  }
+
+  const load =
+    deps?.getDocumentTypeStructure ?? documents.getDocumentTypeStructure.bind(documents);
+  try {
+    const res = await tracker.track(
+      "get_document_type_structure",
+      () => load(documentType, { timeoutMs: SPEED.FALLBACK_TIMEOUT_MS }),
+      documentType
+    );
+    if (!res.ok) {
+      return {
+        fields: new Set(),
+        warning: `Struktur ${documentType} nicht lesbar (${res.error ?? `HTTP ${res.httpStatus}`}) — keine unbekannten Indexfelder senden.`,
+      };
+    }
+    const fields = new Set(parseStructureFieldNames(res.text ?? ""));
+    structureCache.set(documentType, { fields, at: now });
+    return { fields };
+  } catch (e) {
+    return {
+      fields: new Set(),
+      warning: `Struktur ${documentType} abgebrochen (${e instanceof Error ? e.message : String(e)}) — keine unbekannten Indexfelder senden.`,
+    };
+  }
+}
+
 async function liveDocumentResolve(
-  input: { mandant?: string; street: string; houseNumbers: string[] },
+  input: { mandant?: string; street?: string; houseNumbers: string[]; weNr?: string },
   cfg: DocumentLiveCfg,
   tracker: CallTracker,
   deps?: AddressSearchDeps
@@ -380,15 +502,43 @@ async function liveDocumentResolve(
   const search =
     deps?.searchByDocumentType ?? documents.searchByDocumentType.bind(documents);
 
+  let skippedNoStreetFields = false;
+
   for (const documentType of types) {
     if (hits.length) break;
-    const streetField = cfg.street_fields[0];
-    const filters: RestFilter[] = [
-      { field: streetField, op: "like", val: `*${input.street}*`, con: "AND" },
-    ];
-    if (input.mandant && cfg.mandant_fields[0]) {
-      filters.push({ field: cfg.mandant_fields[0], op: "=", val: input.mandant });
+    const struct = await structureFieldsForType(documentType, tracker, deps);
+    if (struct.warning) warnings.push(struct.warning);
+
+    const streetField = input.street
+      ? firstKnown(cfg.street_fields, struct.fields)
+      : undefined;
+    const swenrField = input.weNr
+      ? firstKnown(cfg.swenr_fields, struct.fields)
+      : undefined;
+    const mandantField = input.mandant
+      ? firstKnown(cfg.mandant_fields, struct.fields)
+      : undefined;
+
+    const filters: RestFilter[] = [];
+    if (streetField && input.street) {
+      filters.push({ field: streetField, op: "like", val: `*${input.street}*`, con: "AND" });
     }
+    if (swenrField && input.weNr) {
+      filters.push({ field: swenrField, op: "=", val: input.weNr, con: "AND" });
+    }
+    if (mandantField && input.mandant) {
+      filters.push({ field: mandantField, op: "=", val: input.mandant });
+    }
+
+    if (!filters.length) {
+      skippedNoStreetFields = true;
+      continue;
+    }
+    if (!streetField && !swenrField) {
+      skippedNoStreetFields = true;
+      continue;
+    }
+
     let res: DocRestResult;
     try {
       res = await tracker.track(
@@ -416,30 +566,38 @@ async function liveDocumentResolve(
       continue;
     }
     const rows = parseIndexRecords(res.text ?? "");
+    const streetPick = knownList(cfg.street_fields, struct.fields);
+    const housePick = knownList(cfg.house_fields, struct.fields);
     for (const row of rows) {
-      const streetVal = pickField(row, cfg.street_fields);
-      const houseVal = pickField(row, cfg.house_fields);
+      const streetVal = pickField(row, streetPick.length ? streetPick : cfg.street_fields);
+      const houseVal = pickField(row, housePick.length ? housePick : cfg.house_fields);
       if (input.houseNumbers.length && houseVal) {
         const rowHouses = parseHouseNumbers(houseVal);
         const ok = input.houseNumbers.some((h) => rowHouses.includes(houseKey(h)));
         if (!ok) continue;
       }
       const partnerId = pickField(row, cfg.partner_fields);
-      const objektId = pickField(row, cfg.objekt_fields);
+      const objektId = pickField(row, cfg.objekt_fields) ?? pickField(row, cfg.swenr_fields);
       const mandantId = pickField(row, cfg.mandant_fields) ?? input.mandant;
       hits.push({
         mandantId,
-        street: streetVal ?? input.street,
+        street: streetVal ?? input.street ?? "",
         houseNo: houseVal,
         objektId,
+        weNr: pickField(row, cfg.swenr_fields) ?? input.weNr,
         partnerId,
-        label: [documentType, streetVal ?? input.street, houseVal, partnerId]
+        label: [documentType, streetVal ?? input.street, houseVal, input.weNr, partnerId]
           .filter(Boolean)
           .join(" · "),
-        score: houseVal && input.houseNumbers.length ? 0.85 : 0.65,
+        score:
+          (houseVal && input.houseNumbers.length) || input.weNr ? 0.85 : 0.65,
         source: "document_index",
       });
     }
+  }
+
+  if (skippedNoStreetFields && !hits.length) {
+    warnings.push(NO_STREET_FIELDS_WARNING);
   }
   return { hits, warnings };
 }
@@ -465,7 +623,7 @@ export function normalizeResolveInput(input: ResolvePlaceInput): {
     mandant: input.mandant?.trim() || undefined,
     street: input.street?.trim() || fromQuery?.street,
     houseNumbers,
-    weNr: input.weNr?.trim() || undefined,
+    weNr: input.weNr?.trim() || extractSwenr(input.query ?? "") || undefined,
     parsedFromQuery: fromQuery,
   };
 }
@@ -606,13 +764,14 @@ export async function resolvePlace(input: ResolvePlaceInput): Promise<HelperEnve
       });
     }
 
-    if (live && norm.street) {
+    if (live && (norm.street || norm.weNr)) {
       const cfg = file.document_index_live ?? DEFAULT_LIVE;
       const fb = await liveDocumentResolve(
         {
           mandant: norm.mandant,
           street: norm.street,
           houseNumbers: norm.houseNumbers,
+          weNr: norm.weNr,
         },
         cfg.enabled === false ? { ...cfg, document_types: [] } : cfg,
         tracker,
@@ -637,7 +796,7 @@ export async function resolvePlace(input: ResolvePlaceInput): Promise<HelperEnve
           "Live-Adresse: keine Partner im Document-Index (OBJEKTAKTE/MIETERAKTE). Straße wird nicht als Ticket-KEYWORD verwendet."
         );
       }
-    } else if (!live && norm.street) {
+    } else if (!live && (norm.street || norm.weNr)) {
       if (stats.empty) {
         warnings.push(
           `Adress-Crosswalk ist leer (${stats.path}). Live-Resolve ist aus (liveResolve:false). ` +
@@ -648,8 +807,8 @@ export async function resolvePlace(input: ResolvePlaceInput): Promise<HelperEnve
           "Keine Partner aus Seed/Cache. Live-Resolve ist aus — keine Datasec-Suche."
         );
       }
-    } else if (!norm.street) {
-      warnings.push("Keine Straße erkannt — Adressauflösung übersprungen.");
+    } else if (!norm.street && !norm.weNr) {
+      warnings.push("Keine Straße oder SWENR erkannt — Adressauflösung übersprungen.");
     }
 
     return finishHits([], {

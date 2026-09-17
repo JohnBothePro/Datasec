@@ -84,7 +84,7 @@ Feature flag `DATASEC_HELPERS_ENABLED` (default true). Details: `docs/HELPERS.md
 |------|--------|--------|
 | datasec_h_ask | done | Freitext-Router: Tickets, Akten, Partner, Katalog, News, Schäden, Writes |
 | datasec_h_resolve | done | Live Document-Index + Memory/Disk-Cache; Seed nur Override; nicht getPartnerId |
-| datasec_h_find_tickets | done | Live-Adresse → PARTNERID + KEYWORD/SUBJECT; Straße nie KEYWORD |
+| datasec_h_find_tickets | done | Feld-Discovery, dann PARTNERID + KEYWORD/SUBJECT; Mängel via SUBJECT; Straße nie KEYWORD |
 | datasec_h_ticket_briefing | done | Ticket + Includes; Anlagen = TICKETANLAGEN+TICKETID |
 | datasec_h_catalog | done | Live list_* + In-Memory TTL + Synonym-Fallback |
 | datasec_h_partner_context | done | Stammdaten + optionale Tickets/Schäden; keine stille Partnerwahl |

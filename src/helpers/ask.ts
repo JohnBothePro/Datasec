@@ -9,6 +9,7 @@ import {
 import {
   extractMandant,
   extractPartnerId,
+  extractSwenr,
   extractTicketnr,
   parseAddressFromText,
   parseHouseNumbers,
@@ -51,6 +52,7 @@ export interface ParsedAsk {
   status?: string;
   ticketnr?: string;
   partnerId?: string;
+  weNr?: string;
   note?: string;
   subject?: string;
   catalogKind?: CatalogKind;
@@ -71,6 +73,7 @@ export function parseAsk(text: string): ParsedAsk {
   const ticketnr = extractTicketnr(src);
   const mandant = extractMandant(src);
   const partnerId = extractPartnerId(src);
+  const weNr = extractSwenr(src);
   const addr = parseAddressFromText(src);
   const topic = detectTopicInText(src);
   const status = detectStatusInText(src);
@@ -174,6 +177,7 @@ export function parseAsk(text: string): ParsedAsk {
     status: status?.input,
     ticketnr,
     partnerId,
+    weNr,
     note,
     subject: intent === "create_ticket" ? src : undefined,
     catalogKind,
@@ -228,6 +232,7 @@ export async function ask(input: AskInput): Promise<HelperEnvelope> {
         mandant: parsed.mandant,
         street: parsed.street,
         houseNumbers: parsed.houseNumbers,
+        weNr: parsed.weNr,
         partnerIds: parsed.partnerId ? [parsed.partnerId] : undefined,
       });
       break;
@@ -317,6 +322,7 @@ export async function ask(input: AskInput): Promise<HelperEnvelope> {
         mandant: parsed.mandant,
         street: parsed.street,
         houseNumbers: parsed.houseNumbers,
+        weNr: parsed.weNr,
         topic: parsed.topic,
         status: parsed.status,
         ticketnr: parsed.ticketnr,

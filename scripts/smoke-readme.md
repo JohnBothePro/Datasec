@@ -21,7 +21,7 @@ node dist/index-http.js
 In zweitem Terminal / MCP-Client:
 
 1. `datasec_status` → `tokenLoaded: true`, `env: test`
-2. `datasec_h_ask` mit Text `Mängel Mandant 27 Hauptstraße 118/118a/118b` (erwartet Warnung solange Crosswalk leer; nie Straße als KEYWORD)
+2. `datasec_h_ask` mit Text `Mängel Mandant 27 Hauptstraße 118/118a/118b` (erwartet Warnung: Index ohne Straßenfelder / PARTNERID nötig; nie STREET-404; nie KEYWORD=Mängel; nie Straße als KEYWORD)
 3. `datasec_search_tickets` mit `max: 5`
 3. `datasec_get_ticket` mit bekannter Test-Ticketnr
 4. Write ohne `confirm` → Fehler

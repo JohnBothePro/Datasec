@@ -14,17 +14,56 @@ import {
   detectTopicInText,
   mapStatus,
   mapTopic,
+  resolveSearchKeywords,
 } from "../src/helpers/topic.ts";
 
 describe("topic map", () => {
-  it("maps Mängel / maengel / mangel to keywords + subject hints", () => {
+  it("maps Mängel / maengel / mangel to subject hints, not KEYWORD=Mängel", () => {
     for (const input of ["Mängel", "mangel", "Maengel", "Mängelanzeige"]) {
       const m = mapTopic(input);
       assert.equal(m.matched, true, input);
-      assert.ok(m.keywords.length >= 1, input);
+      assert.deepEqual(m.keywords, [], input);
       assert.ok(m.subjectHints.length >= 1, input);
+      assert.ok(
+        m.subjectHints.some((h) => /\*(Mangel|Mängel|Schaden|Defekt)\*/i.test(h)),
+        input
+      );
       assert.equal(m.topicId, "maengel", input);
+      assert.ok(!m.keywords.includes("Mängel"), input);
     }
+  });
+
+  it("drops synonym-label keywords unless the live catalog confirms them", () => {
+    const topic = {
+      input: "Mängel",
+      matched: true,
+      topicId: "maengel",
+      label: "Mängel",
+      keywords: ["Mängel"],
+      subjectHints: ["*Mangel*"],
+    };
+    const dropped = resolveSearchKeywords(topic, []);
+    assert.deepEqual(dropped.keywords, []);
+    const confirmed = resolveSearchKeywords(topic, ["Mängel", "Steckdosen defekt"]);
+    assert.deepEqual(confirmed.keywords, ["Mängel"]);
+  });
+
+  it("does not emit KEYWORD=Mängel when topic keywords are empty", () => {
+    const topic = mapTopic("Mängel");
+    const { jobs } = buildTicketSearchJobs({
+      partnerIds: [],
+      keywords: topic.keywords,
+      subjectHints: topic.subjectHints,
+    });
+    assert.ok(jobs.length >= 1, "bounded subject search must still run");
+    assert.ok(
+      jobs.every((j) => j.keyword !== "Mängel"),
+      JSON.stringify(jobs)
+    );
+    assert.ok(
+      jobs.some((j) => j.subjectLike && /\*(Mangel|Defekt|Schaden)\*/i.test(j.subjectLike)),
+      JSON.stringify(jobs)
+    );
   });
 
   it("maps offen to UI status candidates, not a silent empty", () => {

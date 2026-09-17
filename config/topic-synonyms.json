@@ -1,5 +1,5 @@
 {
-  "notes": "Pflege: echte Datasec-Schlagworte/Statuswerte nach Katalog-Abgleich ersetzen. Synonyme sind Freitext-Eingaben.",
+  "notes": "Pflege: echte Datasec-Schlagworte nur nach Live-Katalog (getKeywords). Synonym-Labels dürfen nicht als KEYWORD geraten werden. CI ohne Katalog: leere keywords + SUBJECT-Hints.",
   "topics": [
     {
       "id": "maengel",
@@ -18,9 +18,9 @@
         "beschädigung",
         "instandsetzung"
       ],
-      "keywords": ["Mängel"],
+      "keywords": [],
       "subjectHints": ["*Mangel*", "*Mängel*", "*Schaden*", "*Defekt*"],
-      "note": "Exakter Keyword-Name in Datasec ist noch von Ops/Fach zu bestätigen (Katalog via datasec_h_catalog)."
+      "note": "Live (JohnBothePro/Datasec): KEYWORD=Mängel liefert 0 Treffer. 'Mängel' ist Kategorie-Text, kein Ticket-Suchfeld (CATEGORY → 404). Gültig: KEYWORD/SUBJECT/PARTNERID/TICKETNR/S.STATE. CI ohne Katalog: keywords=[], SUBJECT-Hints *Mangel*/*Defekt*/*Schaden*."
     },
     {
       "id": "reklamation",
