@@ -18,28 +18,43 @@ export function getPartnerId(sParamsJson: string): Promise<SoapResult> {
 }
 
 /** §2.5.3.2 */
-export function getPartnerContracts(sPartner: string): Promise<SoapResult> {
-  return md("getPartnerContracts", { sPartner });
+export function getPartnerContracts(
+  sPartner: string,
+  opts?: { timeoutMs?: number }
+): Promise<SoapResult> {
+  return md("getPartnerContracts", { sPartner }, opts);
 }
 
 /** §2.5.3.3 */
-export function getPartnerMasterdata(sPartnerid: string): Promise<SoapResult> {
-  return md("getPartnerMasterdata", { sPartnerid });
+export function getPartnerMasterdata(
+  sPartnerid: string,
+  opts?: { timeoutMs?: number }
+): Promise<SoapResult> {
+  return md("getPartnerMasterdata", { sPartnerid }, opts);
 }
 
 /** §2.5.3.4 */
-export function getAddPartnersMasterdata(sPartnerid: string): Promise<SoapResult> {
-  return md("getAddPartnersMasterdata", { sPartnerid });
+export function getAddPartnersMasterdata(
+  sPartnerid: string,
+  opts?: { timeoutMs?: number }
+): Promise<SoapResult> {
+  return md("getAddPartnersMasterdata", { sPartnerid }, opts);
 }
 
 /** §2.5.3.5 */
-export function getPartnerExtMasterdata(sPartnerid: string): Promise<SoapResult> {
-  return md("getPartnerExtMasterdata", { sPartnerid });
+export function getPartnerExtMasterdata(
+  sPartnerid: string,
+  opts?: { timeoutMs?: number }
+): Promise<SoapResult> {
+  return md("getPartnerExtMasterdata", { sPartnerid }, opts);
 }
 
 /** §2.5.3.6 */
-export function getPartnerConditionsApp(sPartnerid: string): Promise<SoapResult> {
-  return md("getPartnerConditionsApp", { sPartnerid });
+export function getPartnerConditionsApp(
+  sPartnerid: string,
+  opts?: { timeoutMs?: number }
+): Promise<SoapResult> {
+  return md("getPartnerConditionsApp", { sPartnerid }, opts);
 }
 
 /** §2.5.3.7 */
@@ -120,15 +135,23 @@ export function getPartnerMaintenanceIssues(opts: {
   partnerid?: string;
   datefrom?: string;
   dateto?: string;
+  timeoutMs?: number;
 }): Promise<SoapResult> {
-  return md("getPartnerMaintenanceIssues", {
-    sPartnerid: opts.partnerid ?? "",
-    sDatefrom: opts.datefrom ?? "",
-    sDateto: opts.dateto ?? "",
-  });
+  return md(
+    "getPartnerMaintenanceIssues",
+    {
+      sPartnerid: opts.partnerid ?? "",
+      sDatefrom: opts.datefrom ?? "",
+      sDateto: opts.dateto ?? "",
+    },
+    { timeoutMs: opts.timeoutMs }
+  );
 }
 
 /** §2.5.4.2 Newsticker.cfc */
-export function getNewsticker(sPartnerid: string): Promise<SoapResult> {
-  return soapMethod("getNewsticker", { sPartnerid }, { cfc: "Newsticker" });
+export function getNewsticker(
+  sPartnerid: string,
+  opts?: { timeoutMs?: number }
+): Promise<SoapResult> {
+  return soapMethod("getNewsticker", { sPartnerid }, { cfc: "Newsticker", ...opts });
 }

@@ -1,0 +1,33 @@
+{
+  "version": 2,
+  "schema_notes": [
+    "Writable cache + optional seed. NICHT der einzige Adresspfad — Live-Resolve holt Daten aus Datasec.",
+    "seed_entries[]: optionaler Override/Bootstrap (kein TTL). Ops darf befüllen, muss aber nicht.",
+    "entries[]: Live-Treffer (source=live_cache, cachedAt). Memory-TTL 15min, Disk-TTL 24h.",
+    "Invalidation: TTL-Ablauf. Seed läuft nicht ab. Fehlgeschlagene Live-Suche löscht Seed/Cache nicht.",
+    "getPartnerId (SOAP §2.5.3.1) ist KEINE Adresssuche — niemals dafür missbrauchen.",
+    "Straße darf NIEMALS in die Ticket-KEYWORD-Suche."
+  ],
+  "cache": {
+    "ttl_ms": 86400000,
+    "memory_ttl_ms": 900000,
+    "invalidation": "TTL expiry. Seed never expires. Failed live lookup does not evict valid cache/seed."
+  },
+  "ops_still_needed": [
+    "Indexfeld-Namen je Mandant via get_document_type_structure bestätigen (Defaults: STREET/GE_STREET/HAUSNR/PARTNERID).",
+    "Welche Partner-ID steht auf dem Ticket (PARTNERID vs. PARTNER-Nummer)?"
+  ],
+  "document_index_live": {
+    "enabled": true,
+    "document_types": ["OBJEKTAKTE", "MIETERAKTE"],
+    "street_fields": ["STREET", "GE_STREET", "STRASSE", "STR"],
+    "house_fields": ["HAUSNR", "HOUSENO", "HSNR", "HAUSNUMMER", "HOUSE"],
+    "partner_fields": ["PARTNERID", "PARTNER", "MIETERID"],
+    "mandant_fields": ["MANDANT", "MANDANTID", "FIRMA"],
+    "objekt_fields": ["OBJEKTID", "OBJEKT", "WE", "WENR"],
+    "max_types": 2,
+    "max_per_type": 5
+  },
+  "seed_entries": [],
+  "entries": []
+}

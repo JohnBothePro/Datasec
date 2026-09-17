@@ -167,7 +167,11 @@ export function soapMethod(
   return soapCall(method, inner, opts);
 }
 
-export async function getTicketNotes(ticketnr: string, filter = ""): Promise<SoapResult> {
+export async function getTicketNotes(
+  ticketnr: string,
+  filter = "",
+  opts?: { timeoutMs?: number }
+): Promise<SoapResult> {
   const token = session.getToken();
   const inner =
     `    <dw:getTicketNotes>\n` +
@@ -175,7 +179,7 @@ export async function getTicketNotes(ticketnr: string, filter = ""): Promise<Soa
     `      <dw:sTicketnr>${xmlEscape(ticketnr)}</dw:sTicketnr>\n` +
     `      <dw:sFilter>${xmlEscape(filter)}</dw:sFilter>\n` +
     `    </dw:getTicketNotes>`;
-  return soapCall("getTicketNotes", inner);
+  return soapCall("getTicketNotes", inner, opts);
 }
 
 export async function addTicketNote(ticketnr: string, note: string): Promise<SoapResult> {
@@ -233,20 +237,24 @@ export async function linkTicketToTicket(
 }
 
 /** Requires internal ticketid (not ticketnr). */
-export async function getLinkedTickets(ticketid: string): Promise<SoapResult> {
+export async function getLinkedTickets(
+  ticketid: string,
+  opts?: { timeoutMs?: number }
+): Promise<SoapResult> {
   const token = session.getToken();
   const inner =
     `    <dw:getLinkedTickets>\n` +
     `      <dw:authToken>${xmlEscape(token)}</dw:authToken>\n` +
     `      <dw:sTicketid>${xmlEscape(ticketid)}</dw:sTicketid>\n` +
     `    </dw:getLinkedTickets>`;
-  return soapCall("getLinkedTickets", inner);
+  return soapCall("getLinkedTickets", inner, opts);
 }
 
 /** Date format: YYYY-MM-DD HH24:MI:SS */
 export async function getTicketsStatesHist(
   dateFrom: string,
-  dateTo: string
+  dateTo: string,
+  opts?: { timeoutMs?: number }
 ): Promise<SoapResult> {
   const token = session.getToken();
   const inner =
@@ -255,7 +263,9 @@ export async function getTicketsStatesHist(
     `      <dw:sDateFrom>${xmlEscape(dateFrom)}</dw:sDateFrom>\n` +
     `      <dw:sDateTo>${xmlEscape(dateTo)}</dw:sDateTo>\n` +
     `    </dw:getTicketsStatesHist>`;
-  return soapCall("getTicketsStatesHist", inner, { timeoutMs: 120_000 });
+  return soapCall("getTicketsStatesHist", inner, {
+    timeoutMs: opts?.timeoutMs ?? 120_000,
+  });
 }
 
 // ── Additional ticket SOAP (API V1.7 §2.5.2) ─────────────────────────
@@ -360,8 +370,11 @@ export async function doTicketProcessAction(
   });
 }
 
-export async function getTicketProcessButtons(ticketnr: string): Promise<SoapResult> {
-  return soapMethod("getTicketProcessButtons", { sTicketnr: ticketnr });
+export async function getTicketProcessButtons(
+  ticketnr: string,
+  opts?: { timeoutMs?: number }
+): Promise<SoapResult> {
+  return soapMethod("getTicketProcessButtons", { sTicketnr: ticketnr }, opts);
 }
 
 export async function getTicketProcessFields(ticketnr: string): Promise<SoapResult> {
@@ -402,12 +415,17 @@ export async function setTicketValues(
 
 export async function getKeywords(
   channel = "",
-  ticketsystem = ""
+  ticketsystem = "",
+  opts?: { timeoutMs?: number }
 ): Promise<SoapResult> {
-  return soapMethod("getKeywords", {
-    sChannel: channel,
-    sTicketsystem: ticketsystem,
-  });
+  return soapMethod(
+    "getKeywords",
+    {
+      sChannel: channel,
+      sTicketsystem: ticketsystem,
+    },
+    opts
+  );
 }
 
 export async function getTicketProcessFieldsFirstStep(opts: {

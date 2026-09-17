@@ -43,14 +43,15 @@ export interface DocRestResult {
 
 async function restGet(
   path: string,
-  extra?: Record<string, string | number | undefined>
+  extra?: Record<string, string | number | undefined>,
+  opts?: { timeoutMs?: number }
 ): Promise<DocRestResult> {
   const token = session.getToken();
   const q = buildQuery({ authtoken: token, ...(extra ?? {}) });
   const sep = path.includes("?") ? "&" : "?";
   const url = `${session.restBase}${path}${sep}${q}`;
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 120_000);
+  const timer = setTimeout(() => controller.abort(), opts?.timeoutMs ?? 120_000);
   try {
     const res = await fetch(url, { method: "GET", signal: controller.signal });
     const ct = res.headers.get("content-type");
@@ -218,13 +219,16 @@ export async function searchByDocumentType(opts: {
   start?: number;
   max?: number;
   filters?: RestFilter[];
+  timeoutMs?: number;
 }): Promise<DocRestResult> {
   const params: Record<string, string | number | undefined> = {
     start: opts.start ?? 1,
     max: opts.max ?? 10,
   };
   applyFilters(params, opts.filters ?? []);
-  return restGet(`indexes/${encodeURIComponent(opts.documentType)}/`, params);
+  return restGet(`indexes/${encodeURIComponent(opts.documentType)}/`, params, {
+    timeoutMs: opts.timeoutMs,
+  });
 }
 
 /** §2.5.1.6 */
@@ -246,20 +250,25 @@ export async function searchInProcess(opts: {
 }
 
 /** §2.5.1.7 */
-export async function listDepartments(): Promise<DocRestResult> {
-  return restGet("departments/");
+export async function listDepartments(opts?: {
+  timeoutMs?: number;
+}): Promise<DocRestResult> {
+  return restGet("departments/", undefined, opts);
 }
 
 /** §2.5.1.8 */
-export async function listDocumentTypes(): Promise<DocRestResult> {
-  return restGet("document-types/");
+export async function listDocumentTypes(opts?: {
+  timeoutMs?: number;
+}): Promise<DocRestResult> {
+  return restGet("document-types/", undefined, opts);
 }
 
 /** §2.5.1.9 */
 export async function getDocumentTypeStructure(
-  documentType: string
+  documentType: string,
+  opts?: { timeoutMs?: number }
 ): Promise<DocRestResult> {
-  return restGet(`document-types/${encodeURIComponent(documentType)}/`);
+  return restGet(`document-types/${encodeURIComponent(documentType)}/`, undefined, opts);
 }
 
 export function documentSoapEndpoints() {

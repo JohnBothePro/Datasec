@@ -1,0 +1,140 @@
+{
+  "notes": "Pflege: echte Datasec-Schlagworte/Statuswerte nach Katalog-Abgleich ersetzen. Synonyme sind Freitext-Eingaben.",
+  "topics": [
+    {
+      "id": "maengel",
+      "label": "Mängel",
+      "synonyms": [
+        "mängel",
+        "mangel",
+        "maengel",
+        "mängelanzeige",
+        "mängelmeldung",
+        "mangelanzeige",
+        "schaden",
+        "schäden",
+        "schaeden",
+        "defekt",
+        "beschädigung",
+        "instandsetzung"
+      ],
+      "keywords": ["Mängel"],
+      "subjectHints": ["*Mangel*", "*Mängel*", "*Schaden*", "*Defekt*"],
+      "note": "Exakter Keyword-Name in Datasec ist noch von Ops/Fach zu bestätigen (Katalog via datasec_h_catalog)."
+    },
+    {
+      "id": "reklamation",
+      "label": "Reklamation",
+      "synonyms": ["reklamation", "beschwerde", "reklamieren"],
+      "keywords": ["Reklamation"],
+      "subjectHints": ["*Reklamation*", "*Beschwerde*"]
+    },
+    {
+      "id": "heizung",
+      "label": "Heizung",
+      "synonyms": ["heizung", "heizungsausfall", "heizung defekt", "keine heizung"],
+      "keywords": ["Heizung"],
+      "subjectHints": ["*Heizung*"]
+    },
+    {
+      "id": "wasser",
+      "label": "Wasser",
+      "synonyms": ["wasser", "wasserschaden", "rohrbruch", "undicht"],
+      "keywords": ["Wasserschaden"],
+      "subjectHints": ["*Wasser*", "*Rohrbruch*"]
+    },
+    {
+      "id": "kuendigung",
+      "label": "Kündigung",
+      "synonyms": ["kündigung", "kuendigung", "kündigen", "auszug"],
+      "keywords": ["Kündigung"],
+      "subjectHints": ["*Kündigung*", "*Auszug*"]
+    },
+    {
+      "id": "miete",
+      "label": "Miete",
+      "synonyms": ["miete", "mietrückstand", "mietminderung", "inkasso"],
+      "keywords": ["Miete"],
+      "subjectHints": ["*Miete*", "*Rückstand*"]
+    },
+    {
+      "id": "betriebskosten",
+      "label": "Betriebskosten",
+      "synonyms": ["betriebskosten", "nebenkosten", "bk-abrechnung", "heizkosten"],
+      "keywords": ["Betriebskosten"],
+      "subjectHints": ["*Betriebskosten*", "*Nebenkosten*"]
+    },
+    {
+      "id": "laerm",
+      "label": "Lärm",
+      "synonyms": ["lärm", "laerm", "ruhestörung", "lärmbelästigung"],
+      "keywords": ["Lärm"],
+      "subjectHints": ["*Lärm*", "*Ruhe*"]
+    },
+    {
+      "id": "schluessel",
+      "label": "Schlüssel",
+      "synonyms": ["schlüssel", "schluessel", "schließanlage", "transponder"],
+      "keywords": ["Schlüssel"],
+      "subjectHints": ["*Schlüssel*", "*Schließ*"]
+    }
+  ],
+  "document_types": [
+    {
+      "id": "objektakte",
+      "synonyms": ["objektakte", "liegenschaftsakte", "objekt-akte"],
+      "types": ["OBJEKTAKTE"]
+    },
+    {
+      "id": "mieterakte",
+      "synonyms": ["mieterakte", "mietakte", "mieter-akte"],
+      "types": ["MIETERAKTE"]
+    },
+    {
+      "id": "mietvertrag",
+      "synonyms": ["mietvertrag", "wohnraummietvertrag"],
+      "types": ["MIETERAKTE"]
+    },
+    {
+      "id": "korrespondenz",
+      "synonyms": ["korrespondenz", "schreiben", "briefwechsel"],
+      "types": ["KORRESPONDENZ"]
+    },
+    {
+      "id": "rechnung",
+      "synonyms": ["rechnung", "rechnungen", "eingangsrechnung"],
+      "types": ["RECHNUNG"]
+    },
+    {
+      "id": "ticketanlagen",
+      "synonyms": ["ticketanlage", "ticketanlagen", "anhang", "attachment"],
+      "types": ["TICKETANLAGEN"],
+      "note": "Nur mit TICKETID. Nie TICKETARCHIV."
+    }
+  ],
+  "statuses": [
+    {
+      "id": "open",
+      "synonyms": ["offen", "open", "neu", "in bearbeitung", "aktiv", "laufend", "unerledigt"],
+      "mapped_to": ["Offen", "Neu", "In Bearbeitung"],
+      "note": "'offen' ist oft kein API-Wert — Helper mappt auf übliche UI-Texte; per catalog(kind=statuses) prüfen."
+    },
+    {
+      "id": "closed",
+      "synonyms": ["geschlossen", "closed", "erledigt", "fertig", "abgeschlossen"],
+      "mapped_to": ["Geschlossen"]
+    },
+    {
+      "id": "wait_external",
+      "synonyms": ["wartet extern", "extern", "wait_external", "warte auf"],
+      "mapped_to": ["WAIT_EXTERNAL"],
+      "codes": ["WAIT_EXTERNAL"]
+    },
+    {
+      "id": "reminder",
+      "synonyms": ["wiedervorlage", "reminder", "state_reminder"],
+      "mapped_to": ["STATE_REMINDER"],
+      "codes": ["STATE_REMINDER"]
+    }
+  ]
+}

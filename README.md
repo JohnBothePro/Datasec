@@ -21,6 +21,7 @@ Vollständige Tool-Inventar-Datei: **`TOOLS-INVENTORY.md`**.
 | Deep Links Kap. 3 | `datasec_build_deeplink_base/akte/search/document_type/sammelbenutzer` (Token-Embedding default aus, admin+confirm) |
 | SSO Kap. 4 | `datasec_sso_status` (nicht unterstützt V1.7) |
 | Bridge Kap. 1 | `datasec_bridge_info` |
+| **L1 Helpers** | Seconds-latency: `datasec_h_ask` (ein Call, dann antworten). Auto-Adresse aus Datasec (OBJEKTAKTE/MIETERAKTE + Cache). Tickets, Akten, Stammdaten, Katalog, News. Siehe **`docs/HELPERS.md`**. |
 
 Schreiben ist **vollständig implementiert** (nicht „Phase 2“), aber abgesichert:
 
@@ -154,6 +155,8 @@ Oder HTTP-Transport auf `http://127.0.0.1:8788/mcp`.
 | `DATASEC_TOKEN` | — | Token direkt (nur lokal, nie committen) |
 | `DATASEC_WRITES_ENABLED` | **`true`** | Schreiben erlauben; `false` sperrt Write-Tools |
 | `DATASEC_REQUIRE_CONFIRM` | `true` | Write-Tools brauchen `confirm: true` |
+| `DATASEC_HELPERS_ENABLED` | **`true`** | `datasec_h_*` Freitext-Helpers; `false` lässt nur Raw-Tools |
+| `DATASEC_ADDRESS_CACHE_PATH` | `data/address-crosswalk.json` | Writable Auto-Adresse-Cache (TTL 24h; Seed optional) |
 | `PORT` | `8788` | HTTP-Port |
 | `HOST` | `0.0.0.0` | HTTP-Bind |
 | `MCP_API_KEY` | — | Fallback-Key (admin, envs test+prod), wenn nicht in keys.json |
@@ -226,10 +229,14 @@ src/
   stammdaten.ts      # Masterdata/Newsticker §2.5.3–2.5.4
   deeplink.ts        # Direkter Aufruf URL-Builder Kap. 3
   bridge.ts          # Bridge Share-Info Kap. 1
-  tools.ts           # Core MCP-Tools + registerExtendedTools
+  tools.ts           # Core MCP-Tools + registerExtendedTools + helpers
   tools-extended.ts  # Documents/Tickets+/Stammdaten/Deeplink/SSO/Bridge
+  helpers/           # L1 Freitext-Gehirn (datasec_h_*)
   index-stdio.ts     # stdio Entry
   index-http.ts      # HTTP/SSE Entry
+config/topic-synonyms.json
+data/address-crosswalk.json  # leer — Ops-Befüllung
+docs/HELPERS.md      # Helper-Skill, Envelope, Crosswalk-Lücken
 TOOLS-INVENTORY.md   # Tool vs. John's Liste (done/stub)
 keys.example.json    # Vorlage (keine echten Secrets)
 ```
