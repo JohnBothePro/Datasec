@@ -19,6 +19,7 @@ import {
   HELPER_TOOL_NAMES,
   registerHelperTools,
 } from "./helpers/register-helpers.js";
+import { ann } from "./tool-annotations.js";
 
 function textResult(data: unknown, isError = false) {
   const text =
@@ -97,6 +98,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "datasec_status",
     {
+      annotations: ann.read(),
       description:
         "Aktuelle Datasec-Session: Umgebung (test/prod), Writes aktiv?, Token geladen? (ohne Secret), REST/SOAP-Bases.",
       inputSchema: {},
@@ -115,6 +117,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "datasec_set_env",
     {
+      annotations: ann.write(),
       description:
         "Wechselt die Datasec-Umgebung für diese Session (test|prod). Vor Schreibzugriffen in Prod Freigabe einholen.",
       inputSchema: {
@@ -146,6 +149,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "datasec_search_tickets",
     {
+      annotations: ann.read(),
       description:
         "Tickets suchen (REST) — NUR für Listen/Filter wenn ticketnr UNBEKANNT. " +
         "Bei bekannter Ticketnummer (z.B. 32-260907-Q0009) NIEMALS nutzen → datasec_get_ticket. " +
@@ -209,6 +213,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_ticket",
     {
+      annotations: ann.read(),
       description:
         "ERSTE WAHL wenn der User eine Ticketnummer / ticketnr nennt (Format z.B. 32-260907-Q0009). " +
         "Parameter: ticketnr (NICHT ticketid). NICHT zuerst datasec_search_tickets aufrufen — direkt dieses Tool. " +
@@ -239,6 +244,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_notes",
     {
+      annotations: ann.read(),
       description: "Ticket-Notizen per SOAP getTicketNotes. Nur nach expliziter User-Nachfrage / nicht vorsorglich nach Ticket-Lookup.",
       inputSchema: {
         ticketnr: z.string().describe("Ticketnummer"),
@@ -273,6 +279,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_links",
     {
+      annotations: ann.read(),
       description:
         "Verknüpfte Tickets: SOAP getLinkedTickets (braucht ticketid). " +
         "Falls nur ticketnr gegeben: zuerst REST-Lookup. Fallback: Hinweis wenn API fehlschlägt. Nur nach expliziter User-Nachfrage / nicht vorsorglich nach Ticket-Lookup.",
@@ -340,6 +347,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "datasec_get_state_history",
     {
+      annotations: ann.read(),
       description:
         "Statushistorie per SOAP getTicketsStatesHist (Datumsbereich YYYY-MM-DD HH:MM:SS). " +
         "Optional nach ticketid filtern (clientseitig). Nur nach expliziter User-Nachfrage / nicht vorsorglich nach Ticket-Lookup.",
@@ -400,6 +408,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "datasec_add_note",
     {
+      annotations: ann.write(),
       description:
         "Notiz hinzufügen (SOAP addTicketNote). Optional vorher getTicketNotes für Duplikat-Warnung. " +
         "Benötigt confirm:true wenn DATASEC_REQUIRE_CONFIRM=true.",
@@ -461,6 +470,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "datasec_set_state",
     {
+      annotations: ann.write(),
       description:
         "Ticket-Status setzen (SOAP setTicketState). Codes z.B. CLOSED (= Geschlossen). " +
         "Benötigt confirm:true wenn Confirm-Gate aktiv.",
@@ -513,6 +523,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "datasec_link_tickets",
     {
+      annotations: ann.write(),
       description:
         "Zwei Tickets verknüpfen (SOAP linkTicketToTicket). Kein Master-Link. " +
         "Playbook: Inhalt/Mieter/Schlagworte prüfen vor dem Link. confirm:true nötig bei Confirm-Gate.",
@@ -554,6 +565,7 @@ export function registerTools(server: McpServer): void {
   server.registerTool(
     "datasec_send_ticket_mail",
     {
+      annotations: ann.write(),
       description:
         "Ticket-Mail senden — in der DOKU@WEB-API (Stand 2026-09) wurde keine Methode " +
         "sendTicketMail/sendMail gefunden. Tool gibt klaren Stub-Hinweis zurück.",

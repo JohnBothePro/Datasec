@@ -22,6 +22,7 @@ import {
   createTicketGuided,
   setStateGuided,
 } from "./write-guided.js";
+import { ann } from "../tool-annotations.js";
 
 export const HELPER_TOOL_NAMES = [
   "datasec_h_ask",
@@ -59,6 +60,7 @@ export function registerHelperTools(server: McpServer): boolean {
   server.registerTool(
     "datasec_h_ask",
     {
+      annotations: ann.write(),
       description:
         "HAUPT-EINSTIEG für deutschen Freitext über Tickets, Akten, Stammdaten, Katalog, News. " +
         "Designed for seconds-latency: EIN Helper-Call, dann antworten — keine Tool-Stürme. " +
@@ -98,6 +100,7 @@ export function registerHelperTools(server: McpServer): boolean {
   server.registerTool(
     "datasec_h_resolve",
     {
+      annotations: ann.read(),
       description:
         "Mandant + Adresse → Partner (seconds-latency). " +
         "Default: Live-Auflösung über Datasec Document-Index (OBJEKTAKTE, dann MIETERAKTE) " +
@@ -142,6 +145,7 @@ export function registerHelperTools(server: McpServer): boolean {
   server.registerTool(
     "datasec_h_find_tickets",
     {
+      annotations: ann.read(),
       description:
         "Tickets zu Adresse/Mandant/Thema (seconds-latency: max 10 Treffer, max 4 Partner, max 4 parallele Suchen, 8s Timeout). " +
         "Adresse live aus Datasec (nur existierende Indexfelder), dann PARTNERID + KEYWORD/SUBJECT. " +
@@ -190,6 +194,7 @@ export function registerHelperTools(server: McpServer): boolean {
   server.registerTool(
     "datasec_h_ticket_briefing",
     {
+      annotations: ann.read(),
       description:
         "LIGHT default: nur Ticket-Kern (seconds-latency). " +
         "notes/links/history/attachments NUR bei explizitem include — nie automatisch ketten. " +
@@ -217,6 +222,7 @@ export function registerHelperTools(server: McpServer): boolean {
   server.registerTool(
     "datasec_h_catalog",
     {
+      annotations: ann.read(),
       description:
         "In-Memory-Katalog (TTL 24h): keywords/statuses/groups/doc_types/departments. " +
         "list_* wird nicht bei jedem Call getroffen. Seconds-latency nach Warm-Cache.",
@@ -241,6 +247,7 @@ export function registerHelperTools(server: McpServer): boolean {
   server.registerTool(
     "datasec_h_partner_context",
     {
+      annotations: ann.read(),
       description:
         "LIGHT default: nur Stammdaten (base). " +
         "extended/contracts/open_tickets/Schäden nur bei explizitem include — kein Auto-Chain. " +
@@ -283,6 +290,7 @@ export function registerHelperTools(server: McpServer): boolean {
   server.registerTool(
     "datasec_h_find_documents",
     {
+      annotations: ann.read(),
       description:
         "Dokument-/Aktensuche (eine Belegtyp-Suche, max 10, 8s Timeout). " +
         "Belegtyp aus Freitext + live Katalog. Adresse → Partner via Live-Resolve. " +
@@ -314,6 +322,7 @@ export function registerHelperTools(server: McpServer): boolean {
   server.registerTool(
     "datasec_h_news",
     {
+      annotations: ann.read(),
       description:
         "Newsticker (eine SOAP-Suche, 8s Timeout). Optional partnerId. Seconds-latency.",
       inputSchema: {
@@ -336,6 +345,7 @@ export function registerHelperTools(server: McpServer): boolean {
   server.registerTool(
     "datasec_h_create_ticket",
     {
+      annotations: ann.write(),
       description:
         "Geführtes Ticket anlegen: ohne confirm = Vorschau des createTicket-Payloads; " +
         "confirm:true = bestehendes Write-Gate, dann SOAP createTicket. Straße nie als Keyword.",
@@ -376,6 +386,7 @@ export function registerHelperTools(server: McpServer): boolean {
   server.registerTool(
     "datasec_h_add_note",
     {
+      annotations: ann.write(),
       description:
         "Geführte Notiz: ohne confirm = Vorschau; confirm:true = Write-Gate + addTicketNote.",
       inputSchema: {
@@ -401,6 +412,7 @@ export function registerHelperTools(server: McpServer): boolean {
   server.registerTool(
     "datasec_h_set_state",
     {
+      annotations: ann.write(),
       description:
         "Geführter Statuswechsel: ohne confirm = Vorschau; confirm:true = Write-Gate + setTicketState.",
       inputSchema: {
