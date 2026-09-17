@@ -23,10 +23,18 @@ export interface StatusEntry {
   note?: string;
 }
 
+export interface DocumentTypeEntry {
+  id: string;
+  synonyms: string[];
+  types: string[];
+  note?: string;
+}
+
 interface TopicFile {
   notes?: string;
   topics: TopicEntry[];
   statuses: StatusEntry[];
+  document_types?: DocumentTypeEntry[];
 }
 
 let cached: TopicFile | null = null;
@@ -45,6 +53,7 @@ export function loadTopicSynonyms(force = false): TopicFile {
     notes: raw.notes,
     topics: raw.topics ?? [],
     statuses: raw.statuses ?? [],
+    document_types: raw.document_types ?? [],
   };
   return cached;
 }
@@ -186,4 +195,41 @@ export function detectStatusInText(text: string): StatusMapping | undefined {
 
 export function listTopicCatalog(): TopicFile {
   return loadTopicSynonyms();
+}
+
+/** Freitext → Belegtyp-Namen (live catalog names win when passed in). */
+export function mapDocumentTypes(
+  query: string | undefined,
+  catalogNames: string[] = []
+): { types: string[]; note?: string; matched: boolean } {
+  const text = collapseWs(query ?? "");
+  if (!text) return { types: [], matched: false };
+  const hay = normKey(text);
+  const file = loadTopicSynonyms();
+  let best: { entry: DocumentTypeEntry; len: number } | undefined;
+  for (const entry of file.document_types ?? []) {
+    for (const syn of [entry.id, ...entry.synonyms]) {
+      const sk = normKey(syn);
+      if (sk.length >= 4 && hay.includes(sk) && (!best || sk.length > best.len)) {
+        best = { entry, len: sk.length };
+      }
+    }
+  }
+  if (best) {
+    const fromCatalog = catalogNames
+      .filter((n) => {
+        const kn = normKey(n);
+        return best!.entry.types.some((t) => kn === normKey(t) || kn.includes(normKey(t)));
+      })
+      .slice(0, 3);
+    const types = fromCatalog.length ? fromCatalog : [...best.entry.types];
+    return { types, matched: true, note: best.entry.note ?? `Belegtyp ${best.entry.id}` };
+  }
+  const hits = catalogNames
+    .filter((n) => {
+      const kn = normKey(n);
+      return kn.length >= 4 && (hay.includes(kn) || kn.includes(hay));
+    })
+    .slice(0, 3);
+  return { types: hits, matched: hits.length > 0 };
 }

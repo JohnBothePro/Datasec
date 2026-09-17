@@ -96,14 +96,16 @@ export async function createTicketGuided(
         mandant: input.mandant,
         street: input.street,
         houseNumbers: input.houseNumbers,
-        allowDocumentFallback: false,
       });
       if (resolved.raw_calls) tracker.calls.push(...resolved.raw_calls);
       warnings.push(...(resolved.warnings ?? []));
       const pids = envelopeData<{ partnerIds: string[] }>(resolved)?.partnerIds ?? [];
-      partner = pids[0];
-      if (pids.length > 1) {
-        warnings.push("Mehrere Partner — Vorschau nutzt den ersten. Vor confirm prüfen.");
+      if (pids.length === 1) {
+        partner = pids[0];
+      } else if (pids.length > 1) {
+        warnings.push(
+          "Mehrere Partner — Vorschau ohne Partner. Vor confirm einen wählen (kein stilles Picken)."
+        );
       }
     }
 

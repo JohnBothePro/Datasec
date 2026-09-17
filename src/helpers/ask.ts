@@ -20,6 +20,7 @@ import { resolvePlace } from "./resolve-place.js";
 import { getCatalog, type CatalogKind } from "./catalog.js";
 import { partnerContext } from "./partner-context.js";
 import { findDocuments } from "./find-documents.js";
+import { getNews } from "./news.js";
 import {
   addNoteGuided,
   createTicketGuided,
@@ -34,6 +35,8 @@ export type AskIntent =
   | "catalog"
   | "partner_context"
   | "find_documents"
+  | "news"
+  | "damage_reports"
   | "create_ticket"
   | "add_note"
   | "set_state";
@@ -104,16 +107,30 @@ export function parseAsk(text: string): ParsedAsk {
     intent = "ticket_briefing";
     confidence = 0.7;
   } else if (
-    /\b(katalog|schlagwort(?:e|en)?|belegtypen|statuswerte|abteilungen)\b/i.test(src)
+    /\b(katalog|schlagwort(?:e|en)?|belegtypen|dokumenttypen|statuswerte|abteilungen)\b/i.test(
+      src
+    )
   ) {
     intent = "catalog";
     confidence = 0.8;
+  } else if (/\b(newsticker|news[\s-]?ticker|nachrichtenticker)\b/i.test(src)) {
+    intent = "news";
+    confidence = 0.85;
   } else if (
-    /\b(dokument|beleg|akte|anlage|anhang)\b/i.test(src) &&
+    /\b(schadensmeldungen|schadensmeldung|instandhaltungsmängel|maintenance issues)\b/i.test(
+      src
+    )
+  ) {
+    intent = "damage_reports";
+    confidence = 0.8;
+  } else if (
+    /\b(objektakte|mieterakte|mietakte|liegenschaftsakte|dokument(?:e|en)?|beleg(?:e|en)?|akten?|anlage|anhang|korrespondenz|mietvertrag)\b/i.test(
+      src
+    ) &&
     !/\btickets?\b/i.test(src)
   ) {
     intent = "find_documents";
-    confidence = 0.75;
+    confidence = 0.8;
   } else if (
     /\b(stammdaten|partnerkontext|mieterdaten|360)\b/i.test(src) ||
     (/\b(partner|mieter)\b/i.test(src) && !topic && !/\btickets?\b/i.test(src))
@@ -212,7 +229,19 @@ export async function ask(input: AskInput): Promise<HelperEnvelope> {
         street: parsed.street,
         houseNumbers: parsed.houseNumbers,
         partnerIds: parsed.partnerId ? [parsed.partnerId] : undefined,
-        allowDocumentFallback: false,
+      });
+      break;
+    case "news":
+      inner = await getNews({ partnerId: parsed.partnerId });
+      break;
+    case "damage_reports":
+      inner = await partnerContext({
+        query: text,
+        mandant: parsed.mandant,
+        street: parsed.street,
+        houseNumbers: parsed.houseNumbers,
+        partnerId: parsed.partnerId,
+        include: ["damage_reports"],
       });
       break;
     case "catalog":
@@ -232,6 +261,9 @@ export async function ask(input: AskInput): Promise<HelperEnvelope> {
         query: text,
         ticketnr: parsed.ticketnr,
         partnerId: parsed.partnerId,
+        mandant: parsed.mandant,
+        street: parsed.street,
+        houseNumbers: parsed.houseNumbers,
       });
       break;
     case "create_ticket":
@@ -290,7 +322,6 @@ export async function ask(input: AskInput): Promise<HelperEnvelope> {
         ticketnr: parsed.ticketnr,
         partnerIds: parsed.partnerId ? [parsed.partnerId] : undefined,
         limit: SPEED.MAX_RESULTS,
-        allowDocumentFallback: false,
       });
       break;
   }

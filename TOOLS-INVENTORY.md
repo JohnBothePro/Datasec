@@ -82,13 +82,16 @@ Feature flag `DATASEC_HELPERS_ENABLED` (default true). Details: `docs/HELPERS.md
 
 | Tool | Status | Notes |
 |------|--------|--------|
-| datasec_h_ask | done | Freitext-Router (Heuristik, kein LLM) |
-| datasec_h_resolve | done | Crosswalk + optionaler Document-Index; nicht getPartnerId |
-| datasec_h_find_tickets | done | PARTNERID + KEYWORD/SUBJECT; Straße nie KEYWORD |
+| datasec_h_ask | done | Freitext-Router: Tickets, Akten, Partner, Katalog, News, Schäden, Writes |
+| datasec_h_resolve | done | Live Document-Index + Memory/Disk-Cache; Seed nur Override; nicht getPartnerId |
+| datasec_h_find_tickets | done | Live-Adresse → PARTNERID + KEYWORD/SUBJECT; Straße nie KEYWORD |
 | datasec_h_ticket_briefing | done | Ticket + Includes; Anlagen = TICKETANLAGEN+TICKETID |
-| datasec_h_catalog | done | Cached keywords/statuses/doc_types/departments |
-| datasec_h_partner_context | done | Stammdaten + optionale Tickets/Schäden |
-| datasec_h_find_documents | done | TICKETARCHIV gesperrt |
+| datasec_h_catalog | done | Live list_* + In-Memory TTL + Synonym-Fallback |
+| datasec_h_partner_context | done | Stammdaten + optionale Tickets/Schäden; keine stille Partnerwahl |
+| datasec_h_find_documents | done | Live Katalog + Adresse; TICKETARCHIV gesperrt |
+| datasec_h_news | done | Newsticker (eine SOAP-Suche) |
 | datasec_h_create_ticket | done | Preview ohne confirm; Gate bei confirm |
 | datasec_h_add_note | done | Preview ohne confirm; Gate bei confirm |
 | datasec_h_set_state | done | Preview ohne confirm; Gate bei confirm |
+
+Raw-only gaps (bewusst): Prozess-Buttons/Felder, forward/link/master, Dokument-Writes, App-User/GP/EED, Deeplinks — siehe `docs/HELPERS.md`.
