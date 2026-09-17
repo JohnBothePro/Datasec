@@ -2,6 +2,8 @@
 
 Freitext-Gehirn für Claude. Raw-Tools (`datasec_*`) bleiben 1:1 unverändert.
 
+**Outlook-like:** Der Server löst Freitext auf (Mandant / Adresse / Thema), sucht selbst und gibt **kleine Treffer** zurück — Claude macht **einen** Helper-Call (`datasec_h_ask`), nicht eine Outlook-artige Kette aus Katalog + Raw-Suchen. Envelope default **compact** (Ticket: id/nr/subject/keyword/state/partnerid/category/create_on, kein raw XML, kein `raw_calls` außer `debug:true`).
+
 **Designed for seconds-latency.** Ein Helper-Call, dann antworten. Keine Multi-Hop-Ketten und keine explorativen Tool-Stürme, außer der User fragt ausdrücklich nach Extras.
 
 ## Wann welches Tool
@@ -35,6 +37,9 @@ Seed/Cache bleiben Override.
 
 HARD-NO: Niemals eine Straße oder Hausnummer als KEYWORD in datasec_search_tickets.
 Adresse → PARTNERID, dann PARTNERID + KEYWORD/SUBJECT.
+Mandant ohne Objekt: PARTNERID beginnt mit {mandant}. (z.B. 27.) — mit Warnung, nicht still.
+Thema Mängel: KEYWORDs deren CATEGORY=Mängel; nie KEYWORD=Mängel ohne Katalog-Treffer.
+Eine Suchstrategie: Partner-IDs ODER Mandant-Prefix, nie beides.
 
 getPartnerId ist KEINE Adresssuche (typisch Vertrag + Geburtsdatum).
 
@@ -71,12 +76,13 @@ Timeouts liefern **Teilresultate + warnings**, keinen Hänger. Straße bleibt tr
 {
   "ok": true,
   "data": {},
-  "resolution": { "streetAsKeyword": false, "speed": {} },
+  "resolution": { "streetAsKeyword": false, "mode": "mandant_prefix", "speed": {} },
   "ambiguities": [],
-  "warnings": [],
-  "raw_calls": [{ "tool": "search_tickets", "ms": 120, "ok": true }]
+  "warnings": []
 }
 ```
+
+Default **compact**: kein `raw_calls`, kein raw XML. `debug:true` stellt beides wieder her.
 
 Mehrdeutigkeit → `ambiguities[]` + Rückfrage, kein stilles Picken.
 
@@ -96,10 +102,13 @@ Leerer Crosswalk als einziger Pfad ist **nicht** akzeptabel. Resolve zieht Daten
 6. Mehrere Partner → `ambiguities[]`, kein stilles Picken.
 7. API-Fehler/Timeout → klare Warning + leeres Teilresultat, kein Hänger.
 8. `liveResolve:false` (oder `allowDocumentFallback:false`) bleibt lokal — Tests/Offline.
+9. **Mandant-Prefix-Scope** (first-class): Mandant gesetzt, Straße/Objekt unaufgelöst → `PARTNERID like {mandant}.*` (z.B. `27.*`) mit klarer Warning. Stammdaten-API ist kein Pflichtpfad.
+10. Straße angegeben aber ungebunden: trotzdem bounded Ticket-Suche unter Prefix + Thema/SUBJECT; Warning, dass die Straße nicht auf ein Objekt gebunden wurde.
+11. Optionaler Hook `data/street-partner-index.json` (leer gültig) für zukünftigen street→partner Background-Index.
 
 **Invalidation:** TTL. Seed läuft nicht ab. Fehlgeschlagene Live-Suche löscht gültigen Cache nicht.
 
-`getPartnerId` wird nicht verwendet.
+`getPartnerId` wird nicht verwendet. `getPartnerMasterdata` darf fehlen (SUCCESS=false) — Prefix/Index/Ticketnr bleiben gültige Pfade.
 
 ## Feature-Flag
 
@@ -140,7 +149,8 @@ src/helpers/
   normalize.ts
   catalog.ts           # In-Memory TTL + live list_* + Synonym-Fallback
   topic.ts
-  resolve-place.ts     # Live Datasec + Memory/Disk-Cache + optional Seed
+  resolve-place.ts     # Live Datasec + Memory/Disk-Cache + Mandant-Prefix + optional Seed
+  street-partner-index.ts  # optional street→partner hook (data/street-partner-index.json)
   find-tickets.ts
   ticket-briefing.ts   # LIGHT default
   partner-context.ts   # LIGHT default

@@ -14,19 +14,52 @@ import {
   type HelperEnvelope,
 } from "./envelope.js";
 import { looksLikeStreet, streetKey } from "./normalize.js";
-import { mapStatus, mapTopic, resolveSearchKeywords } from "./topic.js";
-import { peekCachedKeywords } from "./catalog.js";
-import { MAX_PARTNERS, resolvePlace, type ResolvePlaceInput } from "./resolve-place.js";
+import { mapStatus, mapTopic, resolveTopicKeywords } from "./topic.js";
+import {
+  ensureKeywordItems,
+  peekCachedKeywordItems,
+  type CatalogItem,
+} from "./catalog.js";
+import {
+  MAX_PARTNERS,
+  mandantPartnerPrefix,
+  resolvePlace,
+  type ResolvePlaceInput,
+} from "./resolve-place.js";
 import { SPEED, budgetExpired, clampResults } from "./speed.js";
 
 export const MAX_SEARCH_CALLS = SPEED.MAX_SEARCH_CALLS;
 
 export interface TicketSearchJob {
   partnerId?: string;
+  /** PARTNERID like prefix, e.g. "27." → filter PARTNERID like "27.*" */
+  partnerIdPrefix?: string;
   keyword?: string;
   subjectLike?: string;
   state?: string;
   ticketnr?: string;
+}
+
+export type SearchStrategy =
+  | "partner_ids"
+  | "mandant_prefix"
+  | "keyword_or_subject"
+  | "ticketnr"
+  | "none";
+
+/** One strategy only — never partnerIds AND mandant-prefix together. */
+export function chooseSearchStrategy(opts: {
+  partnerIds: string[];
+  partnerPrefix?: string;
+  keywords: string[];
+  subjectHints: string[];
+  ticketnr?: string;
+}): SearchStrategy {
+  if (opts.partnerIds.length) return "partner_ids";
+  if (opts.partnerPrefix) return "mandant_prefix";
+  if (opts.keywords.length || opts.subjectHints.length) return "keyword_or_subject";
+  if (opts.ticketnr) return "ticketnr";
+  return "none";
 }
 
 export interface FindTicketsInput extends ResolvePlaceInput {
@@ -36,6 +69,9 @@ export interface FindTicketsInput extends ResolvePlaceInput {
   ticketnr?: string;
   limit?: number;
   start?: number;
+  /** Injected catalog rows (tests). Live path warms getKeywords. */
+  catalogItems?: CatalogItem[];
+  debug?: boolean;
 }
 
 export function assertNotStreetKeyword(value: string | undefined, field: string): string | undefined {
@@ -59,7 +95,8 @@ export function buildTicketSearchJobs(opts: {
   subjectHints: string[];
   state?: string;
   ticketnr?: string;
-}): { jobs: TicketSearchJob[]; warnings: string[] } {
+  partnerPrefix?: string;
+}): { jobs: TicketSearchJob[]; warnings: string[]; strategy: SearchStrategy } {
   const warnings: string[] = [];
   const keywords = opts.keywords
     .map((k) => {
@@ -72,12 +109,27 @@ export function buildTicketSearchJobs(opts: {
     })
     .filter((k): k is string => Boolean(k));
 
-  if (opts.ticketnr && !opts.partnerIds.length && !keywords.length) {
-    return { jobs: [{ ticketnr: opts.ticketnr }], warnings };
+  const strategy = chooseSearchStrategy({
+    partnerIds: opts.partnerIds,
+    partnerPrefix: opts.partnerPrefix,
+    keywords,
+    subjectHints: opts.subjectHints,
+    ticketnr: opts.ticketnr,
+  });
+
+  if (opts.partnerIds.length && opts.partnerPrefix) {
+    warnings.push(
+      "Eine Suchstrategie: PARTNERID-Liste gewinnt, Mandant-Prefix wird nicht zusätzlich gefächert."
+    );
+  }
+
+  if (strategy === "ticketnr") {
+    return { jobs: [{ ticketnr: opts.ticketnr }], warnings, strategy };
   }
 
   const jobs: TicketSearchJob[] = [];
-  const partners = opts.partnerIds.slice(0, MAX_PARTNERS);
+  const partners = strategy === "partner_ids" ? opts.partnerIds.slice(0, MAX_PARTNERS) : [];
+  const prefix = strategy === "mandant_prefix" ? opts.partnerPrefix : undefined;
   const keywordsCapped = keywords.slice(0, SPEED.MAX_KEYWORDS_PER_SEARCH);
   if (keywords.length > keywordsCapped.length) {
     warnings.push(
@@ -89,30 +141,26 @@ export function buildTicketSearchJobs(opts: {
     jobs.push(job);
   };
 
-  if (partners.length) {
+  const attachTopic = (base: TicketSearchJob) => {
     if (keywordsCapped.length) {
-      for (const partnerId of partners) {
-        for (const keyword of keywordsCapped) {
-          push({ partnerId, keyword, state: opts.state });
-        }
-      }
+      push({ ...base, keyword: keywordsCapped[0], state: opts.state });
     } else if (opts.subjectHints.length) {
-      for (const partnerId of partners) {
-        push({ partnerId, subjectLike: opts.subjectHints[0], state: opts.state });
-      }
+      push({ ...base, subjectLike: opts.subjectHints[0], state: opts.state });
     } else {
-      for (const partnerId of partners) {
-        push({ partnerId, state: opts.state });
-      }
+      push({ ...base, state: opts.state });
     }
-  } else if (keywordsCapped.length) {
-    for (const keyword of keywordsCapped) {
-      push({ keyword, state: opts.state });
+  };
+
+  if (strategy === "partner_ids") {
+    for (const partnerId of partners) attachTopic({ partnerId });
+  } else if (strategy === "mandant_prefix" && prefix) {
+    attachTopic({ partnerIdPrefix: prefix });
+  } else if (strategy === "keyword_or_subject") {
+    if (keywordsCapped.length) {
+      push({ keyword: keywordsCapped[0], state: opts.state });
+    } else if (opts.subjectHints.length) {
+      push({ subjectLike: opts.subjectHints[0], state: opts.state });
     }
-  } else if (opts.subjectHints.length) {
-    push({ subjectLike: opts.subjectHints[0], state: opts.state });
-  } else if (opts.ticketnr) {
-    push({ ticketnr: opts.ticketnr });
   }
 
   if (jobs.length >= MAX_SEARCH_CALLS) {
@@ -125,7 +173,7 @@ export function buildTicketSearchJobs(opts: {
       `Fan-out-Deckel: max. ${MAX_PARTNERS} Partner-IDs. Bitte Adresse/WE eingrenzen.`
     );
   }
-  return { jobs, warnings };
+  return { jobs, warnings, strategy };
 }
 
 function ticketKey(t: TicketSummary): string {
@@ -219,13 +267,45 @@ export async function findTickets(
 
     const explicitKeyword =
       input.keyword && input.keyword !== topic.label ? [input.keyword] : [];
-    const mappedKw = resolveSearchKeywords(
+    let catalogItems = input.catalogItems?.length
+      ? input.catalogItems
+      : peekCachedKeywordItems();
+    if (!catalogItems.length && !input.catalogItems) {
+      try {
+        catalogItems = await ensureKeywordItems();
+      } catch (e) {
+        warnings.push(
+          `Keyword-Katalog nicht geladen (${e instanceof Error ? e.message : String(e)}) — SUBJECT-Hints.`
+        );
+      }
+    }
+    const mappedKw = resolveTopicKeywords(
       topic.matched
         ? { ...topic, keywords: [...topic.keywords, ...explicitKeyword] }
         : { ...topic, keywords: input.keyword ? [input.keyword] : [] },
-      peekCachedKeywords()
+      catalogItems,
+      {
+        query: input.query ?? topicText,
+        cap: SPEED.MAX_CATEGORY_KEYWORDS,
+      }
     );
     warnings.push(...mappedKw.warnings);
+
+    const resolveData = resolveEnv
+      ? envelopeData<{
+          partnerIds?: string[];
+          partnerPrefix?: string | null;
+          mode?: string;
+        }>(resolveEnv)
+      : null;
+    const partnerPrefix =
+      partnerIds.length
+        ? undefined
+        : resolveData?.partnerPrefix ??
+          (typeof resolveEnv?.resolution?.partnerPrefix === "string"
+            ? resolveEnv.resolution.partnerPrefix
+            : undefined) ??
+          mandantPartnerPrefix(input.mandant);
 
     const addressAttempted = Boolean(
       input.mandant ||
@@ -234,14 +314,22 @@ export async function findTickets(
         input.weNr ||
         (resolveEnv?.resolution as { street?: string | null } | undefined)?.street
     );
-    if (addressAttempted && !partnerIds.length) {
+    const streetUnbound = Boolean(
+      addressAttempted && !partnerIds.length && (input.street || resolveEnv?.resolution?.street)
+    );
+    if (addressAttempted && !partnerIds.length && !partnerPrefix) {
       warnings.push(
         "Adresse konnte nicht auf PARTNERID aufgelöst werden. Bitte PARTNERID, Ticketnr oder SWENR angeben."
       );
+    } else if (streetUnbound && partnerPrefix) {
+      warnings.push(
+        `Straße nicht auf ein Objekt gebunden — bounded Suche unter Mandant-Prefix ${partnerPrefix} + Thema.`
+      );
     }
 
-    const { jobs, warnings: jobWarnings } = buildTicketSearchJobs({
+    const { jobs, warnings: jobWarnings, strategy } = buildTicketSearchJobs({
       partnerIds,
+      partnerPrefix,
       keywords: mappedKw.keywords,
       subjectHints: topic.subjectHints,
       state: stateForSearch,
@@ -261,6 +349,8 @@ export async function findTickets(
             topic,
             status,
             partnerIds,
+            partnerPrefix: partnerPrefix ?? null,
+            strategy,
             streetAsKeyword: false,
             address: resolveEnv?.resolution ?? null,
           },
@@ -286,6 +376,8 @@ export async function findTickets(
             topic,
             status,
             partnerIds,
+            partnerPrefix: partnerPrefix ?? null,
+            strategy,
             jobs,
             streetAsKeyword: false,
             speed: { timedOut: true, maxResults: limit },
@@ -308,6 +400,12 @@ export async function findTickets(
             if (job.keyword) filters.push({ field: "KEYWORD", op: "=", val: job.keyword });
             if (job.partnerId)
               filters.push({ field: "PARTNERID", op: "=", val: job.partnerId });
+            if (job.partnerIdPrefix)
+              filters.push({
+                field: "PARTNERID",
+                op: "like",
+                val: `${job.partnerIdPrefix}*`,
+              });
             if (job.subjectLike)
               filters.push({ field: "SUBJECT", op: "like", val: job.subjectLike });
             if (job.ticketnr)
@@ -322,7 +420,7 @@ export async function findTickets(
               timeoutMs: SPEED.CALL_TIMEOUT_MS,
             });
           },
-          [job.partnerId, job.keyword, job.subjectLike, job.state]
+          [job.partnerId, job.partnerIdPrefix, job.keyword, job.subjectLike, job.state]
             .filter(Boolean)
             .join(",")
         )
@@ -366,6 +464,8 @@ export async function findTickets(
           topic,
           status,
           partnerIds,
+          partnerPrefix: partnerPrefix ?? null,
+          strategy,
           jobs,
           streetAsKeyword: false,
           streetKey: input.street ? streetKey(input.street) : null,

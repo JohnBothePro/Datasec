@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "schema_notes": [
+    "Optional street → partner index for a future background fill. Empty seed is valid.",
+    "Helpers read this via loadStreetPartnerIndex() / lookupStreetPartnerIndex().",
+    "Not an ops-owned source of truth. Live resolve + Mandant-prefix remain the working paths.",
+    "getPartnerMasterdata/Ext is NOT required to populate this file (often SUCCESS=false on current tokens).",
+    "Lookup key: mandant + streetKey + optional houseKey → partnerIds[].",
+    "Writer (future): background job or best-effort persist from live hits. Do not block Freitext on empty entries.",
+    "Straße darf NIEMALS in die Ticket-KEYWORD-Suche."
+  ],
+  "hook": {
+    "kind": "street_partner_index",
+    "status": "empty_seed",
+    "lookup": "mandant + streetKey + houseKey → partnerIds[]",
+    "writer": "future background fill; optional persist from live resolve — not implemented as a job"
+  },
+  "entries": []
+}

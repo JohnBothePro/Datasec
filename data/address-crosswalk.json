@@ -9,7 +9,9 @@
     "Straße darf NIEMALS in die Ticket-KEYWORD-Suche.",
     "street_fields/house_fields/… sind nur Kandidaten. Live-Pfad ruft getDocumentTypeStructure auf und sendet NUR existierende Felder.",
     "Viele Mandanten (inkl. JohnBothePro/Datasec) haben KEIN STREET/STRASSE/HAUSNR/MANDANT/PARTNERID auf OBJEKTAKTE/MIETERAKTE — typisch SAP: SWENR, SMENR, SGENR, BUKRS, BETREFF, RECNNR, TICKETID.",
-    "Ohne Straßenfelder: keine Live-Adressauflösung über den Document-Index. Filter SWENR nur wenn SWENR/WE-Nr bekannt."
+    "Ohne Straßenfelder: keine Live-Adressauflösung über den Document-Index. Filter SWENR nur wenn SWENR/WE-Nr bekannt.",
+    "Mandant ohne Objekt: PARTNERID-Prefix {mandant}. (z.B. 27.) als first-class Scope mit Warnung.",
+    "Optionaler street→partner Index: data/street-partner-index.json (leerer Seed OK, zukünftiger Background-Fill)."
   ],
   "cache": {
     "ttl_ms": 86400000,

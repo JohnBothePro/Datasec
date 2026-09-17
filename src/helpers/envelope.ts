@@ -126,8 +126,122 @@ export function textResult(data: unknown, isError = false) {
   };
 }
 
-export function envelopeResult(env: HelperEnvelope, forceError?: boolean) {
-  return textResult(env, forceError ?? !env.ok);
+/** Ticket fields kept in compact helper envelopes (Outlook-like). */
+export const COMPACT_TICKET_FIELDS = [
+  "id",
+  "nr",
+  "subject",
+  "keyword",
+  "state",
+  "partnerid",
+  "category",
+  "create_on",
+] as const;
+
+export type CompactTicket = {
+  id?: string;
+  nr?: string;
+  subject?: string;
+  keyword?: string;
+  state?: string;
+  partnerid?: string;
+  category?: string;
+  create_on?: string;
+};
+
+const RAW_PAYLOAD_KEYS = new Set([
+  "rawXml",
+  "raw_xml",
+  "rawSnippet",
+  "raw_snippet",
+  "rawXmlSnippet",
+]);
+
+function strField(rec: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const k of keys) {
+    const v = rec[k];
+    if (typeof v === "string" && v.trim()) return v;
+  }
+  return undefined;
+}
+
+export function looksLikeTicketRecord(v: unknown): v is Record<string, unknown> {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return false;
+  const o = v as Record<string, unknown>;
+  return (
+    "ticketid" in o ||
+    "ticketnr" in o ||
+    ("nr" in o && ("ticketid" in o || "create_on" in o || "keyword" in o || "state" in o))
+  );
+}
+
+export function compactTicket(t: Record<string, unknown>): CompactTicket {
+  return {
+    id: strField(t, "id", "ticketid", "TICKETID"),
+    nr: strField(t, "nr", "ticketnr", "TICKETNR"),
+    subject: strField(t, "subject", "SUBJECT"),
+    keyword: strField(t, "keyword", "KEYWORD"),
+    state: strField(t, "state", "STATE"),
+    partnerid: strField(t, "partnerid", "partnerId", "PARTNERID"),
+    category: strField(t, "category", "CATEGORY"),
+    create_on: strField(t, "create_on", "CREATE_ON"),
+  };
+}
+
+function looksLikeXml(text: string): boolean {
+  const s = text.trim();
+  return s.startsWith("<") && /<\/|[\/?]>/m.test(s);
+}
+
+function compactValue(v: unknown): unknown {
+  if (v == null) return v;
+  if (Array.isArray(v)) {
+    if (v.length && v.every((x) => looksLikeTicketRecord(x))) {
+      return v.map((x) => compactTicket(x as Record<string, unknown>));
+    }
+    return v.map(compactValue);
+  }
+  if (typeof v !== "object") return v;
+  const rec = v as Record<string, unknown>;
+  if (looksLikeTicketRecord(rec) && !("hits" in rec) && !("kind" in rec)) {
+    return compactTicket(rec);
+  }
+  const out: Record<string, unknown> = {};
+  for (const [k, val] of Object.entries(rec)) {
+    if (RAW_PAYLOAD_KEYS.has(k)) continue;
+    if (k === "body" && typeof val === "string" && looksLikeXml(val)) continue;
+    out[k] = compactValue(val);
+  }
+  return out;
+}
+
+export interface PresentEnvelopeOpts {
+  /** When true, keep raw_calls and raw XML. Default compact. */
+  debug?: boolean;
+}
+
+/**
+ * Outlook-like helper presentation: tiny hits, no raw XML, no raw_calls
+ * unless debug:true.
+ */
+export function presentEnvelope<T>(
+  env: HelperEnvelope<T>,
+  opts?: PresentEnvelopeOpts
+): HelperEnvelope<T> {
+  if (opts?.debug) return env;
+  return {
+    ...env,
+    data: compactValue(env.data) as T | null,
+    raw_calls: undefined,
+  };
+}
+
+export function envelopeResult(
+  env: HelperEnvelope,
+  forceError?: boolean,
+  opts?: PresentEnvelopeOpts
+) {
+  return textResult(presentEnvelope(env, opts), forceError ?? !env.ok);
 }
 
 export function ensureAuthEnv(): void {
