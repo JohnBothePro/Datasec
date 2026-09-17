@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "datasec": {
+      "command": "node",
+      "args": ["C:/path/to/datasec-mcp/dist/index-stdio.js"],
+      "env": {
+        "DATASEC_ENV": "test",
+        "DATASEC_TOKEN_FILE": "C:\\Users\\j.bothe\\AppData\\Local\\Temp\\datasec_probe\\datasec_token.env",
+        "DATASEC_WRITES_ENABLED": "true",
+        "DATASEC_REQUIRE_CONFIRM": "true"
+      }
+    }
+  }
+}

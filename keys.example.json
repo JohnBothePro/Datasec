@@ -1,0 +1,26 @@
+[
+  {
+    "name": "example-admin",
+    "key": "REPLACE_WITH_LONG_RANDOM_SECRET_ADMIN_XXXXXXXX",
+    "role": "admin",
+    "envs": ["test", "prod"]
+  },
+  {
+    "name": "example-write-both",
+    "key": "REPLACE_WITH_LONG_RANDOM_SECRET_WRITE_XXXXXXXX",
+    "role": "write",
+    "envs": ["test", "prod"]
+  },
+  {
+    "name": "example-test-read",
+    "key": "REPLACE_WITH_LONG_RANDOM_SECRET_READ_XXXXXXXXX",
+    "role": "read",
+    "envs": ["test"]
+  },
+  {
+    "name": "example-prod-write",
+    "key": "REPLACE_WITH_LONG_RANDOM_SECRET_PROD_WRITE_XXXX",
+    "role": "write",
+    "envs": ["prod"]
+  }
+]
