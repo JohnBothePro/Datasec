@@ -55,6 +55,11 @@ include=[notes|links|history|attachments|…] nur nach expliziter Nachfrage.
 
 Ticket-Anlagen: nur TICKETANLAGEN + TICKETID. Nie TICKETARCHIV.
 
+Dokumente/Akten: getDocumentTypeStructure zuerst, nur existierende Indexfelder.
+PartnerID wie 1401.587.2.15.35 → BUKRS+SWENR+SGENR+SMENR+RECNNR, wenn diese
+Felder da sind (MIETERAKTE/OBJEKTAKTE). Nie PARTNERID senden, wenn das Feld
+fehlt — sonst HTTP-404. Unparsebare PartnerID: Warnung, leeres Ergebnis.
+
 Schreiben: ohne confirm = Vorschau; Ausführen nur mit confirm:true.
 ```
 
@@ -115,6 +120,14 @@ Leerer Crosswalk als einziger Pfad ist **nicht** akzeptabel. Resolve zieht Daten
 
 **Invalidation:** TTL. Seed läuft nicht ab. Fehlgeschlagene Live-Suche löscht gültigen Cache nicht.
 
+## Dokumentensuche (PartnerID)
+
+`datasec_h_find_documents` ruft vor der Indexsuche `getDocumentTypeStructure` auf und sendet **nur Felder, die der Belegtyp wirklich hat**.
+
+Live `MIETERAKTE` / `OBJEKTAKTE` haben **kein** `PARTNERID` (typisch SAP: `BUKRS`, `SWENR`, `SGENR`, `SMENR`, `RECNNR`, …). Ein Datasec-PartnerID wie `1401.587.2.15.35` wird deshalb auf genau diese fünf Segmente gemappt, sofern die Felder existieren. `PARTNERID` wird **nie** geschickt, wenn es in der Struktur fehlt — das wäre HTTP 404.
+
+Ist die PartnerID nicht als fünf nicht-leere Punkt-Segmente parsebar und gibt es kein nutzbares Indexfeld: klare Warnung, Suche übersprungen / leeres Ergebnis — kein 404. `STREET` bleibt gleich ehrlich: ohne Straßenfeld kein STREET-Filter.
+
 `getPartnerId` wird nicht verwendet. `getPartnerMasterdata` darf fehlen (SUCCESS=false) — Prefix/Index/Ticketnr bleiben gültige Pfade.
 
 ## Feature-Flag
@@ -131,7 +144,7 @@ Abgedeckt über `datasec_h_ask` / Helfer:
 |--------------|----------------------|
 | Tickets suchen / briefing | `find_tickets`, `ticket_briefing` |
 | Adresse → Partner | `resolve` (live) |
-| Dokumente / Akten / Anlagen | `find_documents` |
+| Dokumente / Akten / Anlagen | `find_documents` (PartnerID-Segmente auf SAP-Felder, nie PARTNERID-404) |
 | Stammdaten / Partner | `partner_context` |
 | Katalog (Keywords, Status, Belegtypen, Abteilungen) | `catalog` |
 | Newsticker | `news` |

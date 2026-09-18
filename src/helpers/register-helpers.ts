@@ -294,6 +294,9 @@ export function registerHelperTools(server: McpServer): boolean {
       description:
         "Dokument-/Aktensuche (eine Belegtyp-Suche, max 10, 8s Timeout). " +
         "Belegtyp aus Freitext + live Katalog. Adresse → Partner via Live-Resolve. " +
+        "Indexfilter nur nach getDocumentTypeStructure; PartnerID 1401.587.2.15.35 → " +
+        "BUKRS+SWENR+SGENR+SMENR+RECNNR wenn diese Felder existieren (MIETERAKTE/OBJEKTAKTE). " +
+        "Nie PARTNERID senden, wenn das Feld fehlt. " +
         "Ticket-Anlagen: TICKETANLAGEN + TICKETID. TICKETARCHIV gesperrt.",
       inputSchema: {
         query: z.string().optional(),

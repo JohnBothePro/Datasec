@@ -256,6 +256,34 @@ export function extractPartnerId(text: string): string | undefined {
   return m[1];
 }
 
+export interface PartnerIdSegments {
+  bukrs: string;
+  swenr: string;
+  sgenr: string;
+  smenr: string;
+  recnnr: string;
+}
+
+/**
+ * Datasec PartnerID like `1401.587.2.15.35` → SAP index segments.
+ * Requires exactly five non-empty dot-separated parts; otherwise null.
+ */
+export function parsePartnerIdSegments(
+  partnerId: string | undefined | null
+): PartnerIdSegments | null {
+  const raw = String(partnerId ?? "").trim();
+  if (!raw) return null;
+  const parts = raw.split(".").map((p) => p.trim());
+  if (parts.length !== 5 || parts.some((p) => !p)) return null;
+  return {
+    bukrs: parts[0],
+    swenr: parts[1],
+    sgenr: parts[2],
+    smenr: parts[3],
+    recnnr: parts[4],
+  };
+}
+
 /** SAP RE-FX Wirtschaftseinheit (SWENR), never a street. */
 export function extractSwenr(text: string): string | undefined {
   const m = text.match(

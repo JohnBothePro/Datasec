@@ -477,7 +477,7 @@ function persistLiveHits(hits: AddressHit[], deps?: AddressSearchDeps): void {
   }
 }
 
-async function structureFieldsForType(
+export async function structureFieldsForType(
   documentType: string,
   tracker: CallTracker,
   deps?: AddressSearchDeps
