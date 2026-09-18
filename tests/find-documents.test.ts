@@ -77,14 +77,92 @@ describe("findDocuments partner filters", () => {
     const fields = searches[0].filters.map((f) => f.field);
     assert.ok(!fields.includes("PARTNERID"), `must not send PARTNERID: ${JSON.stringify(searches[0].filters)}`);
     assert.deepEqual(
-      searches[0].filters.map((f) => ({ field: f.field, val: f.val })),
+      searches[0].filters.map((f) => ({ field: f.field, val: f.val, con: f.con })),
       [
-        { field: "BUKRS", val: "1401" },
-        { field: "SWENR", val: "587" },
-        { field: "SGENR", val: "2" },
-        { field: "SMENR", val: "15" },
-        { field: "RECNNR", val: "35" },
+        { field: "BUKRS", val: "1401", con: "AND" },
+        { field: "SWENR", val: "587", con: "AND" },
+        { field: "SGENR", val: "2", con: "AND" },
+        { field: "SMENR", val: "15", con: "AND" },
+        { field: "RECNNR", val: "35", con: undefined },
       ]
+    );
+  });
+
+  it("uses the same segment filters on OBJEKTAKTE, never PARTNERID", async () => {
+    const searches: Array<{ documentType: string; filters: RestFilter[] }> = [];
+    const r = await findDocuments({
+      documentType: "OBJEKTAKTE",
+      partnerId: "1401.587.2.15.35",
+      deps: {
+        getDocumentTypeStructure: async () =>
+          structureDoc([...MIETERAKTE_FIELDS, "INDEX_EINS", "RECHTSFALL"]),
+        searchByDocumentType: async (opts) => {
+          searches.push({ documentType: opts.documentType, filters: opts.filters ?? [] });
+          return okDoc("<items/>");
+        },
+      },
+    });
+
+    assert.equal(r.ok, true);
+    assert.equal(searches[0].documentType, "OBJEKTAKTE");
+    assert.ok(!searches[0].filters.some((f) => f.field === "PARTNERID"));
+    assert.deepEqual(
+      searches[0].filters.map((f) => f.field),
+      ["BUKRS", "SWENR", "SGENR", "SMENR", "RECNNR"]
+    );
+  });
+
+  it("does not let a partial SAP key override a real PARTNERID field", async () => {
+    const searches: Array<{ filters: RestFilter[] }> = [];
+    const r = await findDocuments({
+      documentType: "SONSTIGE",
+      partnerId: "1401.587.2.15.35",
+      deps: {
+        getDocumentTypeStructure: async () => structureDoc(["PARTNERID", "BUKRS"]),
+        searchByDocumentType: async (opts) => {
+          searches.push({ filters: opts.filters ?? [] });
+          return okDoc("<items/>");
+        },
+      },
+    });
+
+    assert.equal(r.ok, true);
+    assert.deepEqual(
+      searches[0].filters.map((f) => ({ field: f.field, val: f.val })),
+      [{ field: "PARTNERID", val: "1401.587.2.15.35" }]
+    );
+  });
+
+  it("skips search when structure cannot be read, without sending PARTNERID", async () => {
+    let searched = false;
+    const r = await findDocuments({
+      documentType: "MIETERAKTE",
+      partnerId: "1401.587.2.15.35",
+      deps: {
+        getDocumentTypeStructure: async () => ({
+          ok: false,
+          httpStatus: 500,
+          contentType: null,
+          text: "",
+          isBinary: false,
+          error: "HTTP 500",
+        }),
+        searchByDocumentType: async () => {
+          searched = true;
+          return okDoc("<items/>");
+        },
+      },
+    });
+
+    assert.equal(r.ok, true);
+    assert.equal(searched, false);
+    assert.ok(
+      (r.warnings ?? []).some((w) => /Struktur|nicht lesbar|HTTP 500/i.test(w)),
+      `expected structure warning, got ${JSON.stringify(r.warnings)}`
+    );
+    assert.ok(
+      !(r.warnings ?? []).some((w) => /kein PARTNERID-Feld und keine nutzbaren/i.test(w)),
+      `must not claim missing SAP fields when structure failed: ${JSON.stringify(r.warnings)}`
     );
   });
 

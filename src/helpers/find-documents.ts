@@ -66,7 +66,10 @@ function partnerFiltersForIndex(
       }
     }
   }
-  if (sapFilters.length) {
+  const fullSapKey = sapFilters.length === PARTNER_SEGMENT_FIELDS.length;
+  // Prefer the five-field SAP key when complete. A subset must not beat PARTNERID
+  // (BUKRS alone would match every company document).
+  if (fullSapKey || (sapFilters.length > 0 && !fields.has("PARTNERID"))) {
     return { filters: sapFilters };
   }
   if (fields.has("PARTNERID")) {
@@ -263,19 +266,26 @@ export async function findDocuments(
           getDocumentTypeStructure: deps?.getDocumentTypeStructure,
         });
         if (struct.warning) warnings.push(struct.warning);
+        if (!struct.fields.size) {
+          if (partnerId || filters.length) {
+            continue;
+          }
+        }
         filters = keepKnownIndexFilters(filters, struct.fields, warnings);
 
         if (partnerId) {
-          const mapped = partnerFiltersForIndex(partnerId, struct.fields, documentType);
-          if (mapped.warning) warnings.push(mapped.warning);
-          if (mapped.skip) {
+          const partnerMapped = partnerFiltersForIndex(
+            partnerId,
+            struct.fields,
+            documentType
+          );
+          if (partnerMapped.warning) warnings.push(partnerMapped.warning);
+          if (partnerMapped.skip) {
             continue;
           }
-          filters.push(...mapped.filters);
+          filters.push(...partnerMapped.filters);
         } else if (input.street && /OBJEKT|MIETER/i.test(documentType)) {
-          if (!struct.fields.has("STREET") && !struct.fields.has("STRASSE")) {
-            warnings.push(NO_STREET_FILTER_WARNING);
-          }
+          warnings.push(NO_STREET_FILTER_WARNING);
         }
       }
       for (let i = 0; i < filters.length - 1; i++) {
