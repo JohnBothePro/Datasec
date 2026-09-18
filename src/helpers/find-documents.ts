@@ -13,9 +13,20 @@ import {
 } from "./envelope.js";
 import { getCatalog, peekCachedNames } from "./catalog.js";
 import { mapDocumentTypes, mapTopic } from "./topic.js";
-import { foldGerman } from "./normalize.js";
-import { resolvePlace, type ResolvePlaceInput } from "./resolve-place.js";
+import { foldGerman, parsePartnerIdSegments } from "./normalize.js";
+import {
+  resolvePlace,
+  structureFieldsForType,
+  type AddressSearchDeps,
+  type ResolvePlaceInput,
+} from "./resolve-place.js";
 import { SPEED, clampResults } from "./speed.js";
+
+export interface FindDocumentsDeps {
+  searchByDocumentType?: typeof documents.searchByDocumentType;
+  getDocumentTypeStructure?: AddressSearchDeps["getDocumentTypeStructure"];
+  resolvePlace?: typeof resolvePlace;
+}
 
 export interface FindDocumentsInput {
   query?: string;
@@ -27,6 +38,74 @@ export interface FindDocumentsInput {
   houseNumbers?: ResolvePlaceInput["houseNumbers"];
   filters?: RestFilter[];
   max?: number;
+  deps?: FindDocumentsDeps;
+}
+
+const PARTNER_SEGMENT_FIELDS = [
+  ["bukrs", "BUKRS"],
+  ["swenr", "SWENR"],
+  ["sgenr", "SGENR"],
+  ["smenr", "SMENR"],
+  ["recnnr", "RECNNR"],
+] as const;
+
+const NO_STREET_FILTER_WARNING =
+  "Dokumentensuche ohne PARTNERID: Datasec-Index hat keine Straßenfelder — STREET-Filter wird nicht gesendet. Bitte PARTNERID / Ticketnr / SWENR.";
+
+function partnerFiltersForIndex(
+  partnerId: string,
+  fields: Set<string>,
+  documentType: string
+): { filters: RestFilter[]; warning?: string; skip?: boolean } {
+  const segments = parsePartnerIdSegments(partnerId);
+  const sapFilters: RestFilter[] = [];
+  if (segments) {
+    for (const [key, field] of PARTNER_SEGMENT_FIELDS) {
+      if (fields.has(field)) {
+        sapFilters.push({ field, op: "=", val: segments[key] });
+      }
+    }
+  }
+  if (sapFilters.length) {
+    return { filters: sapFilters };
+  }
+  if (fields.has("PARTNERID")) {
+    return { filters: [{ field: "PARTNERID", op: "=", val: partnerId }] };
+  }
+  const parsedHint = segments
+    ? "kein PARTNERID-Feld und keine nutzbaren BUKRS/SWENR/SGENR/SMENR/RECNNR-Felder"
+    : "PartnerID ist nicht als fünf Segmente (BUKRS.SWENR.SGENR.SMENR.RECNNR) parsebar und der Index hat kein PARTNERID";
+  return {
+    filters: [],
+    skip: true,
+    warning: `Dokumentensuche ${documentType}: ${parsedHint}. Suche übersprungen — kein PARTNERID-Filter.`,
+  };
+}
+
+function keepKnownIndexFilters(
+  filters: RestFilter[],
+  fields: Set<string>,
+  warnings: string[]
+): RestFilter[] {
+  if (!filters.length) return [];
+  if (!fields.size) {
+    warnings.push(
+      "Belegtyp-Struktur unbekannt — Indexfilter nicht gesendet."
+    );
+    return [];
+  }
+  const kept: RestFilter[] = [];
+  for (const f of filters) {
+    const name = f.field.toUpperCase();
+    if (fields.has(name)) {
+      kept.push({ ...f, field: name });
+    } else {
+      warnings.push(
+        `Indexfeld ${f.field} fehlt in der Belegtyp-Struktur — Filter nicht gesendet.`
+      );
+    }
+  }
+  return kept;
 }
 
 const TICKETARCHIV = "TICKETARCHIV";
@@ -56,6 +135,10 @@ export async function findDocuments(
 ): Promise<HelperEnvelope> {
   const tracker = new CallTracker();
   const warnings: string[] = [];
+  const deps = input.deps;
+  const searchDocs =
+    deps?.searchByDocumentType ?? documents.searchByDocumentType.bind(documents);
+  const resolve = deps?.resolvePlace ?? resolvePlace;
 
   try {
     if (input.documentType && foldGerman(input.documentType).toUpperCase() === TICKETARCHIV) {
@@ -70,11 +153,15 @@ export async function findDocuments(
       !partnerId &&
       (input.street || input.mandant || input.houseNumbers)
     ) {
-      const resolved = await resolvePlace({
+      const resolved = await resolve({
         query: input.query,
         mandant: input.mandant,
         street: input.street,
         houseNumbers: input.houseNumbers,
+        deps: {
+          getDocumentTypeStructure: deps?.getDocumentTypeStructure,
+          searchByDocumentType: deps?.searchByDocumentType,
+        },
       });
       warnings.push(...(resolved.warnings ?? []));
       if (resolved.raw_calls) tracker.calls.push(...resolved.raw_calls);
@@ -161,7 +248,7 @@ export async function findDocuments(
     const results: Array<Record<string, unknown>> = [];
 
     for (const documentType of types.slice(0, 1)) {
-      const filters: RestFilter[] = [...(input.filters ?? [])];
+      let filters: RestFilter[] = [...(input.filters ?? [])];
       if (documentType.toUpperCase() === "TICKETANLAGEN") {
         if (ticketid) {
           filters.push({ field: "TICKETID", op: "=", val: ticketid });
@@ -171,12 +258,25 @@ export async function findDocuments(
           );
           continue;
         }
-      } else if (partnerId) {
-        filters.push({ field: "PARTNERID", op: "=", val: partnerId });
-      } else if (input.street && /OBJEKT|MIETER/i.test(documentType)) {
-        warnings.push(
-          "Dokumentensuche ohne PARTNERID: Datasec-Index hat keine Straßenfelder — STREET-Filter wird nicht gesendet. Bitte PARTNERID / Ticketnr / SWENR."
-        );
+      } else {
+        const struct = await structureFieldsForType(documentType, tracker, {
+          getDocumentTypeStructure: deps?.getDocumentTypeStructure,
+        });
+        if (struct.warning) warnings.push(struct.warning);
+        filters = keepKnownIndexFilters(filters, struct.fields, warnings);
+
+        if (partnerId) {
+          const mapped = partnerFiltersForIndex(partnerId, struct.fields, documentType);
+          if (mapped.warning) warnings.push(mapped.warning);
+          if (mapped.skip) {
+            continue;
+          }
+          filters.push(...mapped.filters);
+        } else if (input.street && /OBJEKT|MIETER/i.test(documentType)) {
+          if (!struct.fields.has("STREET") && !struct.fields.has("STRASSE")) {
+            warnings.push(NO_STREET_FILTER_WARNING);
+          }
+        }
       }
       for (let i = 0; i < filters.length - 1; i++) {
         if (!filters[i].con) filters[i].con = "AND";
@@ -185,7 +285,7 @@ export async function findDocuments(
       const res = await tracker.track(
         "search_by_document_type",
         () =>
-          documents.searchByDocumentType({
+          searchDocs({
             documentType,
             start: 1,
             max,
