@@ -92,6 +92,17 @@ describe("applyDocumentFormat (no live Datasec)", () => {
     assert.equal(r.base64, undefined);
   });
 
+  it("format=text fails clearly when pdftotext is missing", async () => {
+    const r = await applyDocumentFormat(binaryDoc(TEXT_LAYER_PDF), {
+      format: "text",
+      extract: { pdftotextBin: null },
+    });
+    assert.equal(r.ok, false);
+    assert.equal(r.extractNote, "tool_missing");
+    assert.equal(r.base64, undefined);
+    assert.match(r.error ?? r.warning ?? "", /pdftotext|binary/i);
+  });
+
   it("non-PDF binary + format=text does not invent text", async () => {
     const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10]);
     const r = await applyDocumentFormat(binaryDoc(jpeg, "image/jpeg"), { format: "text" });

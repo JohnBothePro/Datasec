@@ -315,6 +315,7 @@ export async function ticketBriefing(
                   indexValue,
                   format: "text",
                   maxTextChars: cap,
+                  timeoutMs: t,
                 }),
               indexValue
             );
@@ -325,13 +326,20 @@ export async function ticketBriefing(
               indexField,
               indexValue,
               filename: pickRowField(row, INDEX_NAME_FIELDS) ?? null,
+              ok: doc.ok,
+              error: doc.error,
               text,
               textChars: doc.textChars ?? text.length,
               textEmpty: doc.textEmpty ?? false,
-              extractNote: doc.extractNote ?? (doc.warning ? "warning" : "ok"),
+              extractNote:
+                doc.extractNote ?? (doc.ok ? "ok" : "error"),
               truncated: rawText.length > text.length || doc.extractNote === "truncated",
             });
-            if (doc.textEmpty) {
+            if (!doc.ok) {
+              warnings.push(
+                `Anlage ${indexValue}: ${doc.error ?? doc.extractNote ?? "get_document fehlgeschlagen"}`
+              );
+            } else if (doc.textEmpty) {
               warnings.push(
                 `Anlage ${indexValue}: wenig Text (Scan/Foto?) — datasec_get_document format=binary.`
               );

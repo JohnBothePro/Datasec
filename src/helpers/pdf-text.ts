@@ -24,6 +24,7 @@ export interface PdfTextExtract {
 export interface ExtractPdfTextOpts {
   /** Override binary; `null` forces tool_missing (tests). */
   pdftotextBin?: string | null;
+  timeoutMs?: number;
 }
 
 let cachedBin: string | null | undefined;
@@ -105,7 +106,7 @@ export async function extractPdfText(
   try {
     await writeFile(pdfPath, buf);
     const { stdout } = await execFileAsync(bin, ["-layout", "-enc", "UTF-8", pdfPath, "-"], {
-      timeout: 30_000,
+      timeout: opts?.timeoutMs ?? 30_000,
       maxBuffer: 8 * 1024 * 1024,
     });
     let text = stdout;

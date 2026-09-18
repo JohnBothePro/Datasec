@@ -8,6 +8,7 @@ import {
   DEFAULT_MAX_TEXT_CHARS,
   extractPdfText,
   isPdfBytes,
+  type ExtractPdfTextOpts,
 } from "./helpers/pdf-text.js";
 
 function buildQuery(params: Record<string, string | number | undefined>): string {
@@ -118,10 +119,19 @@ async function restGet(
 /** Default PDF response: extracted text (no Base64). */
 export async function applyDocumentFormat(
   fetched: DocRestResult,
-  opts?: { format?: DocumentFormat; maxTextChars?: number }
+  opts?: {
+    format?: DocumentFormat;
+    maxTextChars?: number;
+    timeoutMs?: number;
+    extract?: ExtractPdfTextOpts;
+  }
 ): Promise<DocRestResult> {
   const format: DocumentFormat = opts?.format ?? "text";
   const maxTextChars = opts?.maxTextChars ?? DEFAULT_MAX_TEXT_CHARS;
+  const extractOpts: ExtractPdfTextOpts = {
+    ...(opts?.timeoutMs != null ? { timeoutMs: opts.timeoutMs } : {}),
+    ...opts?.extract,
+  };
   if (!fetched.ok) return { ...fetched, format };
 
   const bytes = fetched.base64 ? Buffer.from(fetched.base64, "base64") : Buffer.alloc(0);
@@ -138,6 +148,8 @@ export async function applyDocumentFormat(
         textChars: 0,
         textEmpty: true,
         extractNote: "not_pdf",
+        error:
+          'Text-Extraktion nicht verfügbar (kein PDF). format:"binary" für Base64 / Vision nutzen.',
         warning:
           'Text-Extraktion nicht verfügbar (kein PDF). format:"binary" für Base64 / Vision nutzen.',
         format,
@@ -166,11 +178,11 @@ export async function applyDocumentFormat(
     };
   }
 
-  const extracted = await extractPdfText(bytes, maxTextChars);
+  const extracted = await extractPdfText(bytes, maxTextChars, extractOpts);
   if (extracted.extractNote === "tool_missing") {
     if (format === "text") {
       return {
-        ok: fetched.ok,
+        ok: false,
         httpStatus: fetched.httpStatus,
         contentType: fetched.contentType,
         text: "",
@@ -178,6 +190,8 @@ export async function applyDocumentFormat(
         textChars: 0,
         textEmpty: true,
         extractNote: "tool_missing",
+        error:
+          'pdftotext fehlt (Poppler). Windows-Dienst: pdftotext.exe auf PATH oder DATASEC_PDFTOTEXT_PATH setzen. Alternativ format:"binary".',
         warning:
           'pdftotext fehlt (Poppler). Windows-Dienst: pdftotext.exe auf PATH oder DATASEC_PDFTOTEXT_PATH setzen. Alternativ format:"binary".',
         format,
@@ -201,7 +215,7 @@ export async function applyDocumentFormat(
           : undefined;
 
   return {
-    ok: fetched.ok,
+    ok: extracted.extractNote === "extract_failed" ? false : fetched.ok,
     httpStatus: fetched.httpStatus,
     contentType: fetched.contentType,
     text: extracted.text,
@@ -210,6 +224,7 @@ export async function applyDocumentFormat(
     textChars: extracted.textChars,
     textEmpty: extracted.textEmpty,
     extractNote: extracted.extractNote,
+    error: extracted.extractNote === "extract_failed" ? warning : undefined,
     warning,
     format,
   };
@@ -223,14 +238,16 @@ export async function getDocument(opts: {
   merge?: boolean;
   format?: DocumentFormat;
   maxTextChars?: number;
+  timeoutMs?: number;
 }): Promise<DocRestResult> {
   const path = `documents/${encodeURIComponent(opts.documentType)}/${encodeURIComponent(opts.indexField)}/${encodeURIComponent(opts.indexValue)}`;
   const merge =
     opts.merge === false ? "false" : opts.merge === true ? "true" : undefined;
-  const fetched = await restGet(path, { merge });
+  const fetched = await restGet(path, { merge }, { timeoutMs: opts.timeoutMs });
   return applyDocumentFormat(fetched, {
     format: opts.format ?? "text",
     maxTextChars: opts.maxTextChars,
+    timeoutMs: opts.timeoutMs,
   });
 }
 
