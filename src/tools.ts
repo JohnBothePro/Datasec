@@ -154,10 +154,18 @@ export function registerTools(server: McpServer): void {
         "Tickets suchen (REST) — NUR für Listen/Filter wenn ticketnr UNBEKANNT. " +
         "Bei bekannter Ticketnummer (z.B. 32-260907-Q0009) NIEMALS nutzen → datasec_get_ticket. " +
         "Einmal aufrufen dann stoppen; Notizen/Links/Historie danach NICHT ketten außer explizit verlangt. " +
-        "Default max 10. Optional: state (S.STATE), keyword, postkorb (LOGIN), partnerId, Freitext-Filter via field_count.",
+        "Default max 10 (klein für Speed). Kein MCP-Deckel — Obergrenze nur die Datasec-API (bulk/Export: großes max + start-Paging). " +
+        "Optional: state (S.STATE), keyword, postkorb (LOGIN), partnerId, Freitext-Filter via field_count.",
       inputSchema: {
         start: z.number().int().min(1).optional().describe("Startindex (Default 1)"),
-        max: z.number().int().min(1).max(50).optional().describe("Max Treffer (Default 10; für Speed klein halten)"),
+        max: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe(
+            "Max Treffer (Default 10 für Speed; kein MCP-Deckel, Obergrenze nur Datasec-API; bulk/Export darf großes max setzen)"
+          ),
         state: z.string().optional().describe("Filter S.STATE (UI-Text, z.B. Offen, Geschlossen)"),
         keyword: z.string().optional().describe("Filter KEYWORD"),
         postkorb: z.string().optional().describe("Filter LOGIN (Postkorb-Name)"),
