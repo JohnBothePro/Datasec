@@ -40,7 +40,15 @@ export const HELPER_TOOL_NAMES = [
 
 const includeBriefing = z
   .array(
-    z.enum(["notes", "links", "history", "attachments", "process_buttons", "chat"])
+    z.enum([
+      "notes",
+      "links",
+      "history",
+      "attachments",
+      "attachment_texts",
+      "process_buttons",
+      "chat",
+    ])
   )
   .optional();
 
@@ -197,8 +205,9 @@ export function registerHelperTools(server: McpServer): boolean {
       annotations: ann.read(),
       description:
         "LIGHT default: nur Ticket-Kern (seconds-latency). " +
-        "notes/links/history/attachments NUR bei explizitem include — nie automatisch ketten. " +
-        "Anlagen: TICKETANLAGEN + TICKETID (nie TICKETARCHIV).",
+        "notes/links/history/attachments/attachment_texts NUR bei explizitem include — nie automatisch ketten. " +
+        "Anlagen: TICKETANLAGEN + TICKETID (nie TICKETARCHIV). " +
+        "attachments = Indexliste ohne Bytes; attachment_texts = bis 5 Text-Previews (pdftotext, kein Base64).",
       inputSchema: {
         ticketnr: z.string(),
         include: includeBriefing,

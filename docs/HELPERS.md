@@ -51,9 +51,11 @@ Eine Suchstrategie: Partner-IDs ODER Mandant-Prefix, nie beides.
 getPartnerId ist KEINE Adresssuche (typisch Vertrag + Geburtsdatum).
 
 ticket_briefing und partner_context sind LIGHT: Kern zuerst.
-include=[notes|links|history|attachments|…] nur nach expliziter Nachfrage.
+include=[notes|links|history|attachments|attachment_texts|…] nur nach expliziter Nachfrage.
 
 Ticket-Anlagen: nur TICKETANLAGEN + TICKETID. Nie TICKETARCHIV.
+`attachments` = Indexliste (keine Bytes). `attachment_texts` = bis 5 PDF-Text-Previews
+(lokal `pdftotext`, gekürzt, `textEmpty` bei Scan/Foto, nie Base64). Kein OCR.
 
 Dokumente/Akten: getDocumentTypeStructure zuerst, nur existierende Indexfelder.
 PartnerID wie 1401.587.2.15.35 → BUKRS+SWENR+SGENR+SMENR+RECNNR, wenn diese
@@ -153,8 +155,8 @@ Abgedeckt über `datasec_h_ask` / Helfer:
 
 Noch **raw-only** (kein Freitext-Intent — bewusst, um Tool-Stürme zu vermeiden):
 
-- Ticket-Prozess: Buttons, Felder, first step, forward, link, master-ticket, set_keyword, set_ticket_values, chat (Briefing-`include` deckt notes/links/history/attachments/buttons/chat ab)
-- Dokument schreiben: archive, update index, get binary document, search_in_process
+- Ticket-Prozess: Buttons, Felder, first step, forward, link, master-ticket, set_keyword, set_ticket_values, chat (Briefing-`include` deckt notes/links/history/attachments/attachment_texts/buttons/chat ab)
+- Dokument schreiben: archive, update index; Roh-Binary (`datasec_get_document format=binary`), search_in_process
 - Stammdaten-Extras: App-User, GP-Masterdata, Sonderdaten, EED, Push-Flags, Kontakt-Update, Doc-read
 - Deep-Links Kap. 3, Bridge, SSO-Stub, Mail-Stub
 
@@ -172,7 +174,8 @@ src/helpers/
   resolve-place.ts     # Live Datasec + Memory/Disk-Cache + Mandant-Prefix + optional Seed
   street-partner-index.ts  # optional street→partner hook (data/street-partner-index.json)
   find-tickets.ts
-  ticket-briefing.ts   # LIGHT default
+  ticket-briefing.ts   # LIGHT default; include attachment_texts = Text-Previews
+  pdf-text.ts          # pdftotext wrapper (kein OCR; Windows: pdftotext.exe auf PATH)
   partner-context.ts   # LIGHT default
   ask.ts               # Freitext-Router (Tickets, Akten, Partner, Katalog, News, Writes)
   write-guided.ts
