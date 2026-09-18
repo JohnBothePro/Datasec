@@ -116,6 +116,47 @@ function docOut(
   return textResult(payload, !result.ok);
 }
 
+function getDocumentOut(result: documents.DocRestResult) {
+  const payload: Record<string, unknown> = {
+    env: session.env,
+    action: "get_document",
+    ok: result.ok,
+    httpStatus: result.httpStatus,
+    contentType: result.contentType,
+    isBinary: result.isBinary,
+    error: result.error,
+    format: result.format ?? "text",
+  };
+  if (result.textChars !== undefined) payload.textChars = result.textChars;
+  if (result.textEmpty !== undefined) payload.textEmpty = result.textEmpty;
+  if (result.extractNote !== undefined) payload.extractNote = result.extractNote;
+  if (result.warning) payload.warning = result.warning;
+  if (result.base64) {
+    payload.base64Length = result.base64.length;
+    payload.base64 = result.base64;
+    payload.note = "Binary document as base64 (Content-Type siehe contentType)";
+  }
+  if (result.format === "binary" && result.isBinary) {
+    /* base64 only */
+  } else if (
+    result.extractNote !== undefined ||
+    result.format === "text" ||
+    result.format === "both"
+  ) {
+    payload.text = result.text;
+  } else {
+    payload.body = result.text;
+  }
+  return textResult(payload, !result.ok);
+}
+
+export const getDocumentFormatSchema = z
+  .enum(["text", "binary", "both"])
+  .default("text")
+  .describe(
+    'Default "text": PDF-Text via lokales pdftotext, kein Base64. "binary" = nur Base64 (Scans/Fotos/Vision). "both" = Text+Base64.'
+  );
+
 const filterSchema = z.object({
   field: z.string(),
   op: z.string().optional(),
@@ -188,18 +229,38 @@ export function registerExtendedTools(server: McpServer): void {
     {
       annotations: ann.read(),
       description:
-        "Dokument abrufen (REST §2.5.1.1): GET documents/{Belegtyp}/{IndexFeld}/{IndexWert}. Binary → base64. Nur nach expliziter User-Nachfrage / nicht vorsorglich nach Ticket-Lookup.",
+        "Dokument abrufen (REST §2.5.1.1): GET documents/{Belegtyp}/{IndexFeld}/{IndexWert}. " +
+        "Default format=text: PDFs als extrahierter Text (lokales pdftotext, kein Base64) — spart Tokens. " +
+        "format=binary für Scans/Fotos/Vision (Base64). format=both = Text+Base64. Kein OCR. " +
+        "Nur nach expliziter User-Nachfrage / nicht vorsorglich nach Ticket-Lookup.",
       inputSchema: {
         documentType: z.string().describe("Belegtyp, z.B. EINGANGSRECHNUNG"),
         indexField: z.string().describe("Index-Feld, z.B. COLLECTID oder RECHNUNGS_NR"),
         indexValue: z.string().describe("Index-Wert"),
         merge: z.boolean().optional().describe("PDF-Seiten mergen (Default server-seitig)"),
+        format: getDocumentFormatSchema,
+        maxTextChars: z
+          .number()
+          .int()
+          .min(1)
+          .max(500_000)
+          .optional()
+          .describe("Max. Zeichen für Text-Extract (Default 50000); Truncation mit extractNote=truncated."),
       },
     },
     async (args) => {
       ensureAuthEnv();
       try {
-        return docOut("get_document", await documents.getDocument(args));
+        return getDocumentOut(
+          await documents.getDocument({
+            documentType: args.documentType,
+            indexField: args.indexField,
+            indexValue: args.indexValue,
+            merge: args.merge,
+            format: args.format ?? "text",
+            maxTextChars: args.maxTextChars,
+          })
+        );
       } catch (e) {
         return textResult({ ok: false, error: e instanceof Error ? e.message : String(e) }, true);
       }

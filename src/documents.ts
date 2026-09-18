@@ -4,6 +4,11 @@
 import { session, redactSecrets, soapEndpointFor, xmlEscape } from "./client.js";
 import { soapCall, type SoapResult } from "./soap.js";
 import type { RestFilter } from "./rest.js";
+import {
+  DEFAULT_MAX_TEXT_CHARS,
+  extractPdfText,
+  isPdfBytes,
+} from "./helpers/pdf-text.js";
 
 function buildQuery(params: Record<string, string | number | undefined>): string {
   const sp = new URLSearchParams();
@@ -31,6 +36,8 @@ function applyFilters(
   });
 }
 
+export type DocumentFormat = "text" | "binary" | "both";
+
 export interface DocRestResult {
   ok: boolean;
   httpStatus: number;
@@ -39,6 +46,11 @@ export interface DocRestResult {
   isBinary: boolean;
   base64?: string;
   error?: string;
+  textChars?: number;
+  textEmpty?: boolean;
+  extractNote?: string;
+  warning?: string;
+  format?: DocumentFormat;
 }
 
 async function restGet(
@@ -103,17 +115,123 @@ async function restGet(
   }
 }
 
+/** Default PDF response: extracted text (no Base64). */
+export async function applyDocumentFormat(
+  fetched: DocRestResult,
+  opts?: { format?: DocumentFormat; maxTextChars?: number }
+): Promise<DocRestResult> {
+  const format: DocumentFormat = opts?.format ?? "text";
+  const maxTextChars = opts?.maxTextChars ?? DEFAULT_MAX_TEXT_CHARS;
+  if (!fetched.ok) return { ...fetched, format };
+
+  const bytes = fetched.base64 ? Buffer.from(fetched.base64, "base64") : Buffer.alloc(0);
+  const pdf = fetched.isBinary && isPdfBytes(bytes, fetched.contentType);
+
+  if (fetched.isBinary && !pdf) {
+    if (format === "text") {
+      return {
+        ok: fetched.ok,
+        httpStatus: fetched.httpStatus,
+        contentType: fetched.contentType,
+        text: "",
+        isBinary: false,
+        textChars: 0,
+        textEmpty: true,
+        extractNote: "not_pdf",
+        warning:
+          'Text-Extraktion nicht verfügbar (kein PDF). format:"binary" für Base64 / Vision nutzen.',
+        format,
+      };
+    }
+    return {
+      ...fetched,
+      format,
+      warning: format === "both" ? "Kein PDF — Text-Extract nicht verfügbar." : undefined,
+    };
+  }
+
+  if (!pdf) {
+    return { ...fetched, format };
+  }
+
+  if (format === "binary") {
+    return {
+      ok: fetched.ok,
+      httpStatus: fetched.httpStatus,
+      contentType: fetched.contentType,
+      text: "",
+      isBinary: true,
+      base64: fetched.base64,
+      format,
+    };
+  }
+
+  const extracted = await extractPdfText(bytes, maxTextChars);
+  if (extracted.extractNote === "tool_missing") {
+    if (format === "text") {
+      return {
+        ok: fetched.ok,
+        httpStatus: fetched.httpStatus,
+        contentType: fetched.contentType,
+        text: "",
+        isBinary: false,
+        textChars: 0,
+        textEmpty: true,
+        extractNote: "tool_missing",
+        warning:
+          'pdftotext fehlt (Poppler). Windows-Dienst: pdftotext.exe auf PATH oder DATASEC_PDFTOTEXT_PATH setzen. Alternativ format:"binary".',
+        format,
+      };
+    }
+    return {
+      ...fetched,
+      extractNote: "tool_missing",
+      warning: "pdftotext fehlt — Fallback auf Base64.",
+      format,
+    };
+  }
+
+  const warning =
+    extracted.textEmpty
+      ? 'Wenig/kein Text (Scan/Foto?). Kein OCR. format:"binary" für Vision.'
+      : extracted.extractNote === "truncated"
+        ? `Text auf ${maxTextChars} Zeichen gekürzt.`
+        : extracted.extractNote === "extract_failed"
+          ? 'pdftotext fehlgeschlagen. format:"binary" versuchen.'
+          : undefined;
+
+  return {
+    ok: fetched.ok,
+    httpStatus: fetched.httpStatus,
+    contentType: fetched.contentType,
+    text: extracted.text,
+    isBinary: format === "both",
+    base64: format === "both" ? fetched.base64 : undefined,
+    textChars: extracted.textChars,
+    textEmpty: extracted.textEmpty,
+    extractNote: extracted.extractNote,
+    warning,
+    format,
+  };
+}
+
 /** §2.5.1.1 */
 export async function getDocument(opts: {
   documentType: string;
   indexField: string;
   indexValue: string;
   merge?: boolean;
+  format?: DocumentFormat;
+  maxTextChars?: number;
 }): Promise<DocRestResult> {
   const path = `documents/${encodeURIComponent(opts.documentType)}/${encodeURIComponent(opts.indexField)}/${encodeURIComponent(opts.indexValue)}`;
   const merge =
     opts.merge === false ? "false" : opts.merge === true ? "true" : undefined;
-  return restGet(path, { merge });
+  const fetched = await restGet(path, { merge });
+  return applyDocumentFormat(fetched, {
+    format: opts.format ?? "text",
+    maxTextChars: opts.maxTextChars,
+  });
 }
 
 /** §2.5.1.2 updateIndexValues2 */

@@ -18,7 +18,7 @@ Existing core tools kept and not broken.
 | datasec_set_state | 2.5.2.13 | done | setTicketState |
 | datasec_link_tickets | 2.5.2.14 | done | linkTicketToTicket |
 | datasec_send_ticket_mail | — | **stub** | not in API V1.7 docs |
-| datasec_get_document | 2.5.1.1 | done | REST documents/… |
+| datasec_get_document | 2.5.1.1 | done | REST documents/…; default format=text (pdftotext), binary on demand |
 | datasec_update_document | 2.5.1.2 | done | updateIndexValues2 |
 | datasec_archive_document_soap | 2.5.1.3 | done | insertDoc2_1 |
 | datasec_archive_document_rest | 2.5.1.4 | done | POST adddocument/ |
@@ -85,7 +85,7 @@ Feature flag `DATASEC_HELPERS_ENABLED` (default true). Details: `docs/HELPERS.md
 | datasec_h_ask | done | Freitext-Router: Tickets, Akten, Partner, Katalog, News, Schäden, Writes |
 | datasec_h_resolve | done | Live Document-Index + Memory/Disk-Cache; Seed nur Override; nicht getPartnerId |
 | datasec_h_find_tickets | done | Feld-Discovery, dann PARTNERID + KEYWORD/SUBJECT; Mängel via SUBJECT; Straße nie KEYWORD |
-| datasec_h_ticket_briefing | done | Ticket + Includes; Anlagen = TICKETANLAGEN+TICKETID |
+| datasec_h_ticket_briefing | done | Ticket + Includes; Anlagen = TICKETANLAGEN+TICKETID; attachment_texts = Text-Previews ohne Base64 |
 | datasec_h_catalog | done | Live list_* + In-Memory TTL + Synonym-Fallback |
 | datasec_h_partner_context | done | Stammdaten + optionale Tickets/Schäden; keine stille Partnerwahl |
 | datasec_h_find_documents | done | Live Katalog + Adresse; TICKETARCHIV gesperrt |

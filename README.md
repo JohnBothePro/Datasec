@@ -177,6 +177,7 @@ Oder HTTP-Transport auf `http://127.0.0.1:8788/mcp`.
 | `MCP_ALLOW_ANON` | `false` | Wenn true: HTTP ohne Key erlauben (Default deny) |
 | `DATASEC_DESK` | — | Optionaler Desk-Pfad; dort wird `keys.json` gesucht |
 | `BRIDGE_SHARE_PATH` | — | Optionaler lokaler Bridge-Share für `datasec_bridge_info` listPath |
+| `DATASEC_PDFTOTEXT_PATH` | — | Optionaler Pfad zu `pdftotext` / `pdftotext.exe` (sonst PATH) |
 
 
 ## API-Keys (`keys.json`)
@@ -212,6 +213,13 @@ Vorlage: `keys.example.json`. Echte Deploy-Keys nicht committen (`keys.json` / `
 Wenn die aktuelle Session-Umgebung nicht in `envs` liegt, wechselt der Server **automatisch** auf die erste erlaubte Umgebung.  
 `DATASEC_WRITES_ENABLED=false` sperrt Writes **unabhängig** von der Rolle.
 
+## PDF-Text (`datasec_get_document`)
+
+Default **`format=text`**: PDFs werden lokal mit Poppler **`pdftotext -layout -enc UTF-8`** gelesen (kein Base64, spart Tokens).  
+`format=binary` für Scans/Fotos/Vision; `format=both` = Text + Base64. Kein OCR.
+
+Windows-Dienst / Host: **Poppler** installieren und `pdftotext.exe` auf **PATH** legen, oder `DATASEC_PDFTOTEXT_PATH` auf die EXE setzen. Fehlt das Tool, kommt `extractNote: "tool_missing"` (Text-Modus ohne Base64-Fallback).
+
 ## Guardrails (Kurz, aus Playbooks)
 
 Nur als Orientierung für Agenten — Details unter `/workspace/datasec_shared/playbooks/`:
@@ -244,7 +252,7 @@ src/
   bridge.ts          # Bridge Share-Info Kap. 1
   tools.ts           # Core MCP-Tools + registerExtendedTools + helpers
   tools-extended.ts  # Documents/Tickets+/Stammdaten/Deeplink/SSO/Bridge
-  helpers/           # L1 Freitext-Gehirn (datasec_h_*)
+  helpers/           # L1 Freitext-Gehirn (datasec_h_*) + pdf-text.ts (pdftotext)
   index-stdio.ts     # stdio Entry
   index-http.ts      # HTTP/SSE Entry
 config/topic-synonyms.json
