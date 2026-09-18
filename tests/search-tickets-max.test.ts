@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { createDatasecServer } from "../src/tools.ts";
+import { createDatasecServer, searchTicketsMaxSchema } from "../src/tools.ts";
 
 type JsonSchema = {
   type?: string;
@@ -51,16 +51,33 @@ describe("datasec_search_tickets max (no MCP soft-cap)", () => {
     assert.match(text, /bulk|Export/i);
   });
 
-  it("accepts a large max at schema validation (e.g. bulk closed-ticket export)", async () => {
-    const result = await withClient((c) =>
-      c.callTool({ name: "datasec_search_tickets", arguments: { max: 5000 } })
-    );
-    const text = JSON.stringify(result);
-    assert.doesNotMatch(
-      text,
-      /less than or equal to \d+|Input validation error/i,
-      "MCP must not reject large max — only Datasec API may cap the page"
-    );
+  it("Zod accepts a large max and still rejects max below 1", () => {
+    assert.equal(searchTicketsMaxSchema.safeParse(5000).success, true);
+    assert.equal(searchTicketsMaxSchema.safeParse(1).success, true);
+    assert.equal(searchTicketsMaxSchema.safeParse(undefined).success, true);
+    assert.equal(searchTicketsMaxSchema.safeParse(0).success, false);
+    assert.equal(searchTicketsMaxSchema.safeParse(-1).success, false);
+    assert.equal(searchTicketsMaxSchema.safeParse(1.5).success, false);
+  });
+
+  it("accepts a large max at MCP call validation without hitting Datasec", async () => {
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new Error("fetch stub — tests must not call Datasec");
+    }) as typeof fetch;
+    try {
+      const result = await withClient((c) =>
+        c.callTool({ name: "datasec_search_tickets", arguments: { max: 5000 } })
+      );
+      const text = JSON.stringify(result);
+      assert.doesNotMatch(
+        text,
+        /less than or equal to \d+|Input validation error/i,
+        "MCP must not reject large max — only Datasec API may cap the page"
+      );
+    } finally {
+      globalThis.fetch = origFetch;
+    }
   });
 
   it("still rejects max below 1", async () => {

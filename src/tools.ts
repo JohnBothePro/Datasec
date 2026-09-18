@@ -21,6 +21,16 @@ import {
 } from "./helpers/register-helpers.js";
 import { ann } from "./tool-annotations.js";
 
+/** Page size for datasec_search_tickets. Runtime default is 10 in rest.searchTickets; no MCP max. */
+export const searchTicketsMaxSchema = z
+  .number()
+  .int()
+  .min(1)
+  .optional()
+  .describe(
+    "Max Treffer (Default 10 für Speed; kein MCP-Deckel, Obergrenze nur Datasec-API; bulk/Export darf großes max setzen)"
+  );
+
 function textResult(data: unknown, isError = false) {
   const text =
     typeof data === "string" ? data : JSON.stringify(data, null, 2);
@@ -158,14 +168,7 @@ export function registerTools(server: McpServer): void {
         "Optional: state (S.STATE), keyword, postkorb (LOGIN), partnerId, Freitext-Filter via field_count.",
       inputSchema: {
         start: z.number().int().min(1).optional().describe("Startindex (Default 1)"),
-        max: z
-          .number()
-          .int()
-          .min(1)
-          .optional()
-          .describe(
-            "Max Treffer (Default 10 für Speed; kein MCP-Deckel, Obergrenze nur Datasec-API; bulk/Export darf großes max setzen)"
-          ),
+        max: searchTicketsMaxSchema,
         state: z.string().optional().describe("Filter S.STATE (UI-Text, z.B. Offen, Geschlossen)"),
         keyword: z.string().optional().describe("Filter KEYWORD"),
         postkorb: z.string().optional().describe("Filter LOGIN (Postkorb-Name)"),
